@@ -62,7 +62,7 @@ def is_while_statement(s: StatementType) -> TypeGuard[WhileStatementType]:
     return s[0] == InterpreterBase.WHILE_DEF
 
 
-def is_if_statement(s: StatementType) -> bool:
+def is_if_statement(s: StatementType) -> TypeGuard[IfStatementType]:
     return s[0] == InterpreterBase.IF_DEF
 
 
