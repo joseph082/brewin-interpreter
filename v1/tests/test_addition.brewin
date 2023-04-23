@@ -1,0 +1,10 @@
+(class main
+ (method main ()
+  (begin
+		(print (+ 100 200))
+		(print (+ 1230 0))
+        (print (+ "a" "b"))
+		(print (+ "b" "a"))
+  )
+ )
+)
