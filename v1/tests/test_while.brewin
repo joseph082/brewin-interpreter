@@ -1,0 +1,11 @@
+(class main
+ (field n 0)
+ (method main ()
+  (begin
+		(while (< n 10) (begin (set n (+ n 1))))
+		(print n)
+        (while (< n 20) (begin (set n (+ n 1))))
+		(print n)
+  )
+ )
+)
