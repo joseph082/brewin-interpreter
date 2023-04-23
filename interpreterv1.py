@@ -1,7 +1,8 @@
+# from __future__ import annotations  # https://stackoverflow.com/questions/33533148/how-do-i-type-hint-a-method-with-the-type-of-the-enclosing-class
 from intbase import InterpreterBase, ErrorType
 from bparser import BParser, StringWithLineNumber
 
-from typing import TypeGuard, Union, List, Tuple, Any, NoReturn
+from typing import TypeGuard, Union, List, Tuple, Any, NoReturn, Self
 
 
 # https://devblogs.microsoft.com/python/pylance-introduces-five-new-features-that-enable-type-magic-for-python-developers/
@@ -31,6 +32,7 @@ FieldStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, StringWit
 MethodOrFieldType = Union[MethodStatementType, FieldStatementType]
 
 CallExpressionType = Tuple[StringWithLineNumber, StringWithLineNumber, StringWithLineNumber, StatementType, *Tuple[StatementType, ...]]  # expression instead of statement
+NewExpressionType = Tuple[StringWithLineNumber, StringWithLineNumber]
 ClassMembersType = Tuple[MethodOrFieldType, *Tuple[MethodOrFieldType, ...]]
 
 # ClassStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, MethodOrFieldType, *Tuple[MethodOrFieldType, ...]]
@@ -57,6 +59,10 @@ def is_set_statement(s: StatementType) -> TypeGuard[SetStatementType]:
 
 def is_call_expression(s: StatementType) -> TypeGuard[CallExpressionType]:
     return s[0] == InterpreterBase.CALL_DEF
+
+
+def is_new_expression(s: StatementType) -> TypeGuard[NewExpressionType]:
+    return s[0] == InterpreterBase.NEW_DEF
 
 
 def is_while_statement(s: StatementType) -> TypeGuard[WhileStatementType]:
@@ -168,7 +174,7 @@ class Field:
 
 
 class ObjectDefinition:
-    def __init__(self, interpreter) -> None:
+    def __init__(self, interpreter: 'Interpreter') -> None:
         self.obj_methods = {}
         self.__obj_fields = {}
         self.interpreter = interpreter
@@ -220,6 +226,8 @@ class ObjectDefinition:
             current_method = self.__current_method
             result = self.__execute_call_expression(statement)
             self.__current_method = current_method
+        elif is_new_expression(statement):
+            result = self.__execute_new_expression(statement)
         elif is_while_statement(statement):
             self.__execute_while_statement(statement)
         elif is_if_statement(statement):
@@ -291,7 +299,8 @@ class ObjectDefinition:
             self.__obj_fields[var_name].curr_val = res
         return
 
-    def __parse_value(self, x: StatementType | StringWithLineNumber | str | int) -> int | StringWithLineNumber | bool | str | NoReturn:
+    def __parse_value(self, x: StatementType | StringWithLineNumber | str | int | Self) -> int | StringWithLineNumber | bool | str | Self | NoReturn:
+        # https://stackoverflow.com/a/70932112 for Self
         if is_statement(x):
             res = self.__run_statement(x)
             if res is None:
@@ -315,12 +324,12 @@ class ObjectDefinition:
                     return self.__current_method.params[x]
                 return self.__obj_fields[x].curr_val
             else:
-                raise Exception('unknown string as parse_value argument')
+                raise Exception(f'unknown StringWithLineNumber as parse_value argument: {x}')
         elif isinstance(x, str):
             if x[0] == '"' and x[-1] == '"':
                 return x[1:-1]
             return x
-        elif isinstance(x, int):
+        elif isinstance(x, (int, ObjectDefinition)):
             return x
         else:
             raise Exception('not a tuple, string, or int in parse_value')
@@ -406,10 +415,12 @@ class ObjectDefinition:
         if is_StringWithLineNumber(call_str) and is_StringWithLineNumber(expr[2]) and call_str.line_num is not None:
             if expr[1] == InterpreterBase.ME_DEF:
                 obj_instance = self
-                return self.call_method(expr[2], call_str.line_num, tuple(map(self.__parse_value, expr[3:])))
             else:
                 obj_instance = self.__obj_fields[expr[1]].curr_val
             return obj_instance.call_method(expr[2], call_str.line_num, tuple(map(self.__parse_value, expr[3:])))
+
+    def __execute_new_expression(self, expr: NewExpressionType):
+        return self.interpreter.classes[expr[1]].instantiate_object()
 
 
 """
@@ -423,7 +434,7 @@ InterpreterBase.error().
 
 class ClassDefinition:
     # constructor for a ClassDefinition
-    def __init__(self, fields_or_methods: ClassMembersType, interpreter) -> None:
+    def __init__(self, fields_or_methods: ClassMembersType, interpreter: 'Interpreter') -> None:  # https://stackoverflow.com/questions/33837918/type-hints-solve-circular-dependency
         self.my_methods = {}
         self.my_fields = {}
         self.interpreter = interpreter
@@ -488,7 +499,7 @@ class Interpreter(InterpreterBase):
                 self.classes[class_name] = ClassDefinition(fields_or_methods, self)
 
         print(f'tuple    parsed_program: {parsed_program} in __discover_all_classes_and_track_them')
-        print(f'self.classes: {self.classes} in __discover_all_classes_and_track_them')
+        print(f'self.classes: {self.classes.keys()} in __discover_all_classes_and_track_them')
         return
 
     def __find_definition_for_class(self, class_name: str) -> ClassDefinition:
