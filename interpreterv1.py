@@ -22,12 +22,12 @@ SetStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, StringWithL
 StatementType = Tuple[Any, *Tuple[Any, ...]]
 
 IfStatementType = Tuple[StringWithLineNumber, StatementType, StatementType, StatementType]  # second should be expression
-
 BeginStatementType = Tuple[StringWithLineNumber, Tuple[StatementType, *Tuple[StatementType]]]
+WhileStatementType = Tuple[StringWithLineNumber, StatementType, BeginStatementType]  # second should be expression
 
 MethodStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, Tuple[StringWithLineNumber], StatementType]
 FieldValueType = Union[int, StringWithLineNumber, bool, None, str]  # 'null' == None?
-FieldStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, FieldValueType]
+FieldStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, StringWithLineNumber]
 MethodOrFieldType = Union[MethodStatementType, FieldStatementType]
 
 ClassMembersType = Tuple[MethodOrFieldType, *Tuple[MethodOrFieldType, ...]]
@@ -58,7 +58,7 @@ def is_call_statement(s: StatementType) -> TypeGuard[IfStatementType]:
     return s[0] == InterpreterBase.CALL_DEF
 
 
-def is_while_statement(s: StatementType) -> bool:
+def is_while_statement(s: StatementType) -> TypeGuard[WhileStatementType]:
     return s[0] == InterpreterBase.WHILE_DEF
 
 
@@ -94,7 +94,7 @@ def is_method_statement(m) -> TypeGuard[MethodStatementType]:
     return isinstance(m, tuple) and len(m) == 4 and m[0] == InterpreterBase.METHOD_DEF
 
 
-def is_field_statement(f) -> TypeGuard[MethodStatementType]:
+def is_field_statement(f) -> TypeGuard[FieldStatementType]:
     return isinstance(f, tuple) and len(f) == 3 and f[0] == InterpreterBase.FIELD_DEF
 
 
@@ -108,6 +108,18 @@ def is_class_statement(c) -> TypeGuard[ClassStatementType]:
 
 def is_statement(s) -> TypeGuard[StatementType]:
     return isinstance(s, tuple)
+
+
+AddExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]
+IntStringComparisonExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # <, >, <=, >=
+
+
+def is_add_expression(e) -> TypeGuard[AddExpressionType]:
+    return e[0] == '+'
+
+
+def is_int_string_comparison_expression(e) -> TypeGuard[IntStringComparisonExpressionType]:
+    return e[0] == '<' or e[0] == '>' or e[0] == '<=' or e[0] == '>='
 
 
 class Method:
@@ -197,8 +209,7 @@ class ObjectDefinition:
             pass
             # result = self.__execute_call_statement(statement)
         elif is_while_statement(statement):
-            pass
-            # result = self.__execute_while_statement(statement)
+            self.__execute_while_statement(statement)
         elif is_if_statement(statement):
             self.__execute_if_statement(statement)
         elif is_return_statement(statement):
@@ -208,6 +219,10 @@ class ObjectDefinition:
             self.__execute_all_sub_statements_of_begin_statement(statement)
         elif is_set_statement(statement):
             self.__execute_set_statement(statement)
+        elif is_add_expression(statement):
+            result = self.__execute_add_expression(statement)
+        elif is_int_string_comparison_expression(statement):
+            result = self.__execute_int_string_comparison_expression(statement)
 
         return result
 
@@ -265,11 +280,11 @@ class ObjectDefinition:
             self.__obj_fields[var_name].curr_val = res
         return
 
-    def __parse_value(self, x: StatementType | StringWithLineNumber) -> int | StringWithLineNumber | bool | str | NoReturn:
+    def __parse_value(self, x: StatementType | StringWithLineNumber | str | int) -> int | StringWithLineNumber | bool | str | NoReturn:
         if is_statement(x):
             res = self.__run_statement(x)
             if res is None:
-                raise Exception('__parse called with None')
+                raise Exception('__parse_val called with None')
             return self.__parse_value(res)
         elif is_StringWithLineNumber(x):
             try:
@@ -290,6 +305,8 @@ class ObjectDefinition:
                 return self.__obj_fields[x].curr_val
             else:
                 raise Exception('unknown string as parse_value argument')
+        elif isinstance(x, (str, int)):
+            return x
         else:
             raise Exception('not a tuple or a string in parse_value')
 
@@ -339,6 +356,32 @@ class ObjectDefinition:
         else:
             self.interpreter.error(ErrorType.TYPE_ERROR, line_num=statement[0].line_num)
         return
+
+    def __execute_while_statement(self, statement: WhileStatementType) -> None:
+        while (expr_res := self.__parse_value(statement[1])) is True:
+            self.__run_statement(statement[2])
+        if expr_res is False:
+            return
+        self.interpreter.error(ErrorType.TYPE_ERROR, line_num=statement[0].line_num)
+        return
+
+    def __execute_add_expression(self, expr: AddExpressionType) -> int | str:
+        a = self.__parse_value(expr[1])
+        b = self.__parse_value(expr[2])
+        if isinstance(a, int) and isinstance(b, int):
+            return a + b
+        if isinstance(a, str) and isinstance(b, str):
+            return f'"{a}{b}"'  # return with quotes to mark this as literal instead of a var
+        self.interpreter.error(ErrorType.TYPE_ERROR, line_num=expr[0].line_num)
+        return "_"
+
+    def __execute_int_string_comparison_expression(self, expr: IntStringComparisonExpressionType) -> bool:
+        a = self.__parse_value(expr[1])
+        b = self.__parse_value(expr[2])
+        if (isinstance(a, int) and isinstance(b, int)) or ((isinstance(a, str) and isinstance(b, str))):
+            return eval(f'{a} {expr[0]} {b}')
+        self.interpreter.error(ErrorType.TYPE_ERROR, line_num=expr[0].line_num)
+        return False
 
 
 """
