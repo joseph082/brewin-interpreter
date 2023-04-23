@@ -382,10 +382,11 @@ class ObjectDefinition:
     def __execute_int_string_comparison_expression(self, expr: IntStringComparisonExpressionType) -> bool:
         a = self.__parse_value(expr[1])
         b = self.__parse_value(expr[2])
-        if isinstance(a, int) and isinstance(b, int):
-            return eval(f'{a} {expr[0]} {b}')
-        if (isinstance(a, str) and isinstance(b, str)):
-            return eval(f'"{a}" {expr[0]} "{b}"')
+        comparison_functions = {'>': lambda x, y: x > y, '>=': lambda x, y: x >= y,
+                                '<': lambda x, y: x < y, '<=': lambda x, y: x <= y
+                                }
+        if (isinstance(a, int) and isinstance(b, int)) or (isinstance(a, str) and isinstance(b, str)):
+            return comparison_functions[expr[0]](a, b)
         self.interpreter.error(ErrorType.TYPE_ERROR, line_num=expr[0].line_num)
         return False
 
