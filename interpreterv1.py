@@ -112,6 +112,7 @@ def is_statement(s) -> TypeGuard[StatementType]:
 
 AddExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]
 IntStringComparisonExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # <, >, <=, >=
+EqualityComparisonExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]
 
 
 def is_add_expression(e) -> TypeGuard[AddExpressionType]:
@@ -378,8 +379,10 @@ class ObjectDefinition:
     def __execute_int_string_comparison_expression(self, expr: IntStringComparisonExpressionType) -> bool:
         a = self.__parse_value(expr[1])
         b = self.__parse_value(expr[2])
-        if (isinstance(a, int) and isinstance(b, int)) or ((isinstance(a, str) and isinstance(b, str))):
+        if isinstance(a, int) and isinstance(b, int):
             return eval(f'{a} {expr[0]} {b}')
+        if (isinstance(a, str) and isinstance(b, str)):
+            return eval(f'"{a}" {expr[0]} "{b}"')
         self.interpreter.error(ErrorType.TYPE_ERROR, line_num=expr[0].line_num)
         return False
 
@@ -503,8 +506,6 @@ def deep_tuple_helper(x):
 
 def deeptuple(l: list) -> Tuple:
     return tuple(deep_tuple_helper(x) for x in l)
-    # except:
-    #     raise Exception('s')
 
 
 def print_line_nums(parsed_program) -> None:
