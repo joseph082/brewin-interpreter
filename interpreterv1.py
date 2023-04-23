@@ -419,6 +419,9 @@ class ObjectDefinition:
                 obj_instance = self
             else:
                 obj_instance = self.__obj_fields[expr[1]].curr_val
+            if obj_instance is None:
+                self.interpreter.error(ErrorType.FAULT_ERROR, line_num=call_str.line_num)
+                return
             return obj_instance.call_method(expr[2], call_str.line_num, tuple(map(self.__parse_value, expr[3:])))
 
     def __execute_new_expression(self, expr: NewExpressionType):

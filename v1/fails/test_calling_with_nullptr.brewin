@@ -1,0 +1,13 @@
+(class main
+ (field x null)
+ (method main ()
+  (begin
+		(call
+		
+		
+        x
+		d)
+
+  )
+ )
+)
