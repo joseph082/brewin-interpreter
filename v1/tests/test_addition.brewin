@@ -2,7 +2,10 @@
  (field s "a")
  (field n 1)
  (method main ()
-  (begin
+    (call me s 1)
+ )
+ (method s (n)
+ (begin
 		(print (+ 100 200))
 		(print (+ 1230 0))
         (print (+ "a" "b"))
