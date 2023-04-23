@@ -16,11 +16,12 @@ PrintStatementType = Tuple[StringWithLineNumber, *PrintArgsType]
 InputStringStatementType = Tuple[StringWithLineNumber, StringWithLineNumber]
 InputIntStatementType = Tuple[StringWithLineNumber, StringWithLineNumber]
 
-
 StatementType = Tuple[Any, *Tuple[Any, ...]]
 
+BeginStatementType = Tuple[StringWithLineNumber, Tuple[StatementType, *Tuple[StatementType]]]
+
 MethodStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, Tuple[StringWithLineNumber], StatementType]
-FieldValueType = Union[int, StringWithLineNumber, bool, None]  # 'null' == None? # maybe add str too?
+FieldValueType = Union[int, StringWithLineNumber, bool, None, str]  # 'null' == None?
 FieldStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, FieldValueType]
 MethodOrFieldType = Union[MethodStatementType, FieldStatementType]
 
@@ -56,7 +57,7 @@ def is_if_statement(s: StatementType) -> bool:
     return s[0] == InterpreterBase.IF_DEF
 
 
-def is_begin_statement(s: StatementType) -> bool:
+def is_begin_statement(s: StatementType) -> TypeGuard[BeginStatementType]:
     return s[0] == InterpreterBase.BEGIN_DEF
 
 
@@ -65,7 +66,7 @@ def is_return_statement(s: StatementType) -> bool:
 
 
 def is_field_type(s) -> TypeGuard[FieldValueType]:
-    return isinstance(s, (bool, int, str, StringWithLineNumber))
+    return isinstance(s, (bool, int, str, StringWithLineNumber)) or s is None
 
 
 def is_StringWithLineNumber(s) -> TypeGuard[StringWithLineNumber]:
@@ -103,7 +104,9 @@ def is_statement(s) -> TypeGuard[StatementType]:
 class Method:
     def __init__(self, name: StringWithLineNumber, method_params, expr) -> None:
         self.name = name
-        self.params = method_params
+        self.params = {}  # name mapped to value
+        for p in method_params:
+            self.params[p] = None
         self.expr = expr
 
         return
@@ -144,13 +147,14 @@ class Field:
 class ObjectDefinition:
     def __init__(self, interpreter) -> None:
         self.obj_methods = {}
-        self.obj_fields = {}
+        self.__obj_fields = {}
         self.interpreter = interpreter
-        print(f'self.interpreter id: {id(self.interpreter)}')
         return
     # Interpret the specified method using the provided parameters
 
     def __find_method(self, method_name: str) -> Method:
+        # if method_name not in self.obj_methods:
+        #     self.interpreter.error(ErrorType.NAME_ERROR, line_num=3)
         return self.obj_methods[method_name]
 
     def add_method(self, name, method: Method) -> None:
@@ -159,11 +163,12 @@ class ObjectDefinition:
         return
 
     def add_field(self, name: StringWithLineNumber, initial_val) -> None:
-        self.obj_fields[name] = Field(name, initial_val)
+        self.__obj_fields[name] = Field(name, initial_val)
         return
 
     def call_method(self, method_name: str, parameters=()):
         method = self.__find_method(method_name)
+        self.__current_method = method
         statement = method.get_top_level_statement()
         result = self.__run_statement(statement)
         return result
@@ -171,14 +176,14 @@ class ObjectDefinition:
     # gets the result, if any
 
     def __run_statement(self, statement):
-        print(f'statement: {statement}')
+        print(f'running statement: {statement}')
         result = None
         if is_print_statement(statement):
-            result = self.__execute_print_statement(statement)
+            self.__execute_print_statement(statement)
         elif is_input_str_statement(statement):
-            result = self.__execute_input_str_statement(statement)
+            self.__execute_input_str_statement(statement)
         elif is_input_int_statement(statement):
-            result = self.__execute_input_int_statement(statement)
+            self.__execute_input_int_statement(statement)
         elif is_call_statement(statement):
             pass
             # result = self.__execute_call_statement(statement)
@@ -192,43 +197,78 @@ class ObjectDefinition:
             pass
             # result = self.__execute_return_statement(statement)
         elif is_begin_statement(statement):
-            pass
-            # result = self.__execute_all_sub_statements_of_begin_statement(statement)
-        #
-        else:
-            result = None
+            self.__execute_all_sub_statements_of_begin_statement(statement)
 
         return result
 
-    def __execute_print_statement(self, args: PrintStatementType):
+    def __execute_print_statement(self, args: PrintStatementType) -> None:
         output_str = ''
         for a in args[1:]:
             if is_statement(a):
                 # execute statement
                 res = self.__run_statement(a)
-                print(type(res), 'type res')
-                output_str += str(res)
+                if res is True:
+                    output_str += InterpreterBase.TRUE_DEF
+                elif res is False:
+                    output_str += InterpreterBase.FALSE_DEF
+                # elif res is None:
+                #     output_str += Interpreter.NULL_DEF
+                # barista prints 'None' and idt any test case tests on this
+                else:
+                    output_str += str(res)
             elif is_StringWithLineNumber(a):
+                try:
+                    int_val = int(a)
+                    output_str += str(int_val)
+                    continue
+                except ValueError:
+                    pass
+                except Exception as e:
+                    raise (e)  # unexpected exception
+
                 if a[0] == '"' and a[-1] == '"':
-                    output_str += a[1:-1]  # remove quotess
-                elif a[0] != '"' and a[-1] != '"':
-                    raise Exception('this is a variable that needs its value to be read')
+                    output_str += a[1:-1]  # remove quotes
+                elif a == InterpreterBase.TRUE_DEF or a == InterpreterBase.FALSE_DEF:
+                    output_str += a
+                elif a[0] != '"' and a[-1] != '"':  # variable
+                    if a in self.__current_method.params:
+                        output_str += str(self.__current_method.params[a])
+                    else:
+                        output_str += str(self.__obj_fields[a].curr_val)
                 else:
                     raise Exception('unknown print argument string')
             else:
                 raise Exception('not a tuple or a string in print statement')
         self.interpreter.output(output_str)
+        return
 
-    def __execute_input_str_statement(self, statement) -> str:
+    def __execute_input_str_statement(self, statement: InputStringStatementType) -> None:
         # check function params, then class vars
-        name = statement[1]
-        if not is_StringWithLineNumber(name):
-            raise Exception('__execute_input_str_statement')
-        print(name)
-        return ''
+        var_name = statement[1]
+        input = self.interpreter.get_input()
+        if not isinstance(input, str):
+            raise TypeError("input isn't a str")
+        if var_name in self.__current_method.params:
+            self.__current_method.params[var_name] = input
+        else:
+            self.__obj_fields[var_name].curr_val = input
+        return
 
-    def __execute_input_int_statement(self, statement) -> int:
-        return 0
+    def __execute_input_int_statement(self, statement: InputIntStatementType) -> None:
+        var_name = statement[1]
+        input = self.interpreter.get_input()
+        if not isinstance(input, str):
+            raise TypeError("input isn't a str")
+        if var_name in self.__current_method.params:
+            self.__current_method.params[var_name] = input
+        else:
+            self.__obj_fields[var_name].curr_val = input
+        return
+
+    def __execute_all_sub_statements_of_begin_statement(self, statement: BeginStatementType) -> None:
+        for sub_statement in statement:
+            self.__run_statement(sub_statement)
+        return
 
 
 """
@@ -261,7 +301,6 @@ class ClassDefinition:
         self.my_methods = {}
         self.my_fields = {}
         self.interpreter = interpreter
-        print(f'self.interpreter id: {id(self.interpreter)}')
 
         for expr in fields_or_methods:
             name = expr[1]
@@ -284,8 +323,8 @@ class ClassDefinition:
         obj = ObjectDefinition(self.interpreter)
         for name, method in self.my_methods.items():
             obj.add_method(name, method)
-        for field in self.my_fields:
-            obj.add_field(field.get_name(), field.get_initial_value())
+        for name, field in self.my_fields.items():
+            obj.add_field(name, field.get_initial_value())
         return obj
 
 
@@ -300,16 +339,18 @@ class Interpreter(InterpreterBase):
         for expr in parsed_program:
             if is_class_statement(expr):
                 class_name = expr[1]
+                if not is_StringWithLineNumber(class_name):  # also doesn't get correct type
+                    raise Exception('not is_StringWithLineNumber')
                 fields_or_methods = expr[2:]  # doesn't get correct type so use typeguard
                 if not is_class_members_type(fields_or_methods):
                     return
                 # print(id(fields_or_methods[0]), id(expr[2]))  # same ids
                 if class_name in self.classes:
-                    super().error(ErrorType.NAME_ERROR, line_num=1)  # TODO
+                    super().error(ErrorType.NAME_ERROR, line_num=class_name.line_num)  # TODO
                     return
                 self.classes[class_name] = ClassDefinition(fields_or_methods, self)
 
-        print(f'parsed_program: {parsed_program} in __discover_all_classes_and_track_them', 1, 1)
+        print(f'tuple    parsed_program: {parsed_program} in __discover_all_classes_and_track_them')
         print(f'self.classes: {self.classes} in __discover_all_classes_and_track_them')
         return
 
@@ -373,11 +414,24 @@ def main():
                       ' (print "hello world!")',
                       ' ) # end of method',
                       ') # end of class']
+    program_source = """(class main
+ (field x 0)
+ (field y "test")
+ (method main ()
+  (begin
+   (print "literal" 1 true false)
+   (inputi x)
+   (print x)
+   (inputi y)
+   (print y)
+  )
+ )
+)""".split('\n')
     # this is how you use our BParser class to parse a valid
     # Brewin program into python list format.
     result, parsed_program = BParser.parse(program_source)
     if result == True:
-        print(parsed_program)
+        print(f'original parsed_program: {parsed_program}')
     else:
         print('Parsing failed. There must have been a mismatched parenthesis.')
 
