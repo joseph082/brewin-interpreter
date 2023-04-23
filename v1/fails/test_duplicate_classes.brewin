@@ -1,0 +1,14 @@
+(class main
+ (method main ()
+  (begin
+		(print (+ 100 "abc"))
+  )
+ )
+)
+(class main
+ (method main ()
+  (begin
+		(print (+ 100 "abc"))
+  )
+ )
+)
