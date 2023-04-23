@@ -1,13 +1,21 @@
 (class main
  (field x "abc")
+ (field s "never used bc shadowing")
  (method main ()
-  (begin
-   (set x "def")
-   (print x)
+ (begin
+   (call me test "def")
+   (call me test x)
+ )
+ )
+ (method test (s)
+ (begin
+   (print s)
    (set x 20)
    (print x)
-   (set x true)
+   (set s true)
+   (print s)
+   (set x (>= x 10))
    (print x)
   )
- )
+  )
 )
