@@ -127,7 +127,8 @@ def generate_test_suite_v1():
          "test_comparisons1", "test_call_and_new"],
         ["test_if", "test_incompat_operands1",  # fails
          "test_duplicate_classes", "test_duplicate_fields", "test_duplicate_methods",  # added cases
-         "test_calling_undefined_method", "test_calling_undefined_method2"],
+         "test_calling_undefined_method", "test_calling_undefined_method2",
+         "test_set_unknown_field"],
     )
 
 

@@ -295,8 +295,10 @@ class ObjectDefinition:
         #     res = self.__run_statement(statement[2])
         if var_name in self.__current_method.params:
             self.__current_method.params[var_name] = res
-        else:
+        elif var_name in self.__obj_fields:
             self.__obj_fields[var_name].curr_val = res
+        else:
+            self.interpreter.error(ErrorType.NAME_ERROR, line_num=statement[0].line_num)
         return
 
     def __parse_value(self, x: StatementType | StringWithLineNumber | str | int | Self) -> int | StringWithLineNumber | bool | str | Self | NoReturn:

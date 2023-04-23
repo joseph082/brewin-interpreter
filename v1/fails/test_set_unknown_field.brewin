@@ -1,0 +1,10 @@
+(class main
+    (field x 0)
+ (method main ()
+ (call me test)
+ )
+ (method test ()
+ (begin
+		(set y 0)
+  ))
+)
