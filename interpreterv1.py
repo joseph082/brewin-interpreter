@@ -366,7 +366,18 @@ class ClassDefinition:
             elif is_field_statement(expr):
                 if name in self.my_fields:
                     self.interpreter.error(ErrorType.NAME_ERROR, line_num=name.line_num)  # todo
-                self.my_fields[name] = Field(name, expr[2])
+                try:
+                    field_val = int(expr[2])
+                except:
+                    if expr[2] == InterpreterBase.TRUE_DEF:
+                        field_val = True
+                    elif expr[2] == InterpreterBase.FALSE_DEF:
+                        field_val = False
+                    elif expr[2] == InterpreterBase.NULL_DEF:
+                        field_val = None
+                    else:
+                        field_val = expr[2][1:-1]
+                self.my_fields[name] = Field(name, field_val)
             else:
                 raise Exception('fields_or_methods expr: {expr} not parsed')
         if len(self.my_methods) == 0:
