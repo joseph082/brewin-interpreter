@@ -1,0 +1,10 @@
+(class main
+ (method main ()
+  (begin
+		(call
+        me
+		d)
+
+  )
+ )
+)

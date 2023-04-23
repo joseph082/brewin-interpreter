@@ -125,7 +125,8 @@ def generate_test_suite_v1():
         ["test_inputi", "test_recursion1", "test_set_field",  # passes
          "test_hello_world", "test_inputs", "test_addition", "test_while", "test_comparisons1"],  # added cases
         ["test_if", "test_incompat_operands1",  # fails
-         "test_duplicate_classes", "test_duplicate_fields", "test_duplicate_methods"],  # added cases
+         "test_duplicate_classes", "test_duplicate_fields", "test_duplicate_methods",  # added cases
+         "test_calling_undefined_method", "test_calling_undefined_method2"],
     )
 
 
