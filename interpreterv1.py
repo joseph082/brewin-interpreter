@@ -18,7 +18,10 @@ InputIntStatementType = Tuple[StringWithLineNumber, StringWithLineNumber]
 
 SetStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, StringWithLineNumber]
 
+
 StatementType = Tuple[Any, *Tuple[Any, ...]]
+
+IfStatementType = Tuple[StringWithLineNumber, StatementType, StatementType, StatementType]  # second should be expression
 
 BeginStatementType = Tuple[StringWithLineNumber, Tuple[StatementType, *Tuple[StatementType]]]
 
@@ -51,7 +54,7 @@ def is_set_statement(s: StatementType) -> TypeGuard[SetStatementType]:
     return s[0] == InterpreterBase.SET_DEF
 
 
-def is_call_statement(s: StatementType) -> bool:
+def is_call_statement(s: StatementType) -> TypeGuard[IfStatementType]:
     return s[0] == InterpreterBase.CALL_DEF
 
 
@@ -197,8 +200,7 @@ class ObjectDefinition:
             pass
             # result = self.__execute_while_statement(statement)
         elif is_if_statement(statement):
-            pass
-            # result = self.__execute_if_statement(statement)
+            self.__execute_if_statement(statement)
         elif is_return_statement(statement):
             pass
             # result = self.__execute_return_statement(statement)
@@ -328,25 +330,20 @@ class ObjectDefinition:
         else:
             raise Exception(x, type(x), 'called stringify with invalid type.')
 
+    def __execute_if_statement(self, statement: IfStatementType) -> None:
+        expr_res = self.__parse_value(statement[1])
+        if expr_res is True:
+            self.__run_statement(statement[2])
+        elif expr_res is False:
+            self.__run_statement(statement[3])
+        else:
+            self.interpreter.error(ErrorType.TYPE_ERROR, line_num=statement[0].line_num)
+        return
+
 
 """
-You must meet the following requirements when supporting classes in your interpreter.
-● Every Brewin program must have at least one class called main, with at least one
-method named main in that class. This is where execution of your Brewin program
-begins.
-13
-● Brewin programs may have zero or more additional classes beyond the main class
-● Every Brewin class must have at least one method defined within it
-● Every Brewin class may have zero or more fields defined within it
-● Class names are case sensitive, and must start with an underscore or letter, and may
-have underscores, letters and numbers
-● Classes may be defined in any order within your source file; all classes are visible to all
-other classes (e.g., for instantiating a new object) regardless of whether they're define
-above or below the location of instantiation
 ● Methods and fields may be defined in any order within the class; all methods and fields
 are visible to all other methods inside the class regardless of the order they are defined
-● There are no official constructors or destructors in Brewin. If you want to define and call
-your own methods in a class to perform initialization or destruction you may.
 ● Duplicate class names are not allowed. If a program defines two or more classes with
 the same name you must generate an error of type ErrorType.NAME_ERROR by calling
 InterpreterBase.error().
