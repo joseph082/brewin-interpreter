@@ -271,8 +271,7 @@ class ObjectDefinition:
             return self.__parse_value(res)
         elif is_StringWithLineNumber(x):
             try:
-                i = int(x)
-                return i
+                return int(x)
             except ValueError:
                 pass
             except Exception as e:
@@ -317,8 +316,14 @@ class ObjectDefinition:
                 return x
             if x[0] != '"' and x[-1] != '"':  # variable
                 if x in self.__current_method.params:
-                    return self.__stringify(self.__current_method.params[x])
-                return self.__stringify(self.__obj_fields[x].curr_val)
+                    value = self.__current_method.params[x]
+                else:
+                    value = self.__obj_fields[x].curr_val
+                if isinstance(value, str):
+                    return value
+
+                return self.__stringify(value)
+
             raise Exception('unknown string in stringify')
         else:
             raise Exception(x, type(x), 'called stringify with invalid type.')
@@ -476,7 +481,8 @@ def main():
    (set x true)
    (print x)
    (print "literal" 1 true false)
-   (inputi x)
+   # (inputi x)
+   (inputs x)
    (print x)
    (inputi y)
    (print y)
