@@ -270,7 +270,6 @@ class ObjectDefinition:
 
     def __execute_set_statement(self, statement: SetStatementType) -> None:
         var_name = statement[1]
-        res = None
         res = self.__parse_value(statement[2])
         # if is_statement(statement[2]):
         #     # execute statement
@@ -306,10 +305,14 @@ class ObjectDefinition:
                 return self.__obj_fields[x].curr_val
             else:
                 raise Exception('unknown string as parse_value argument')
-        elif isinstance(x, (str, int)):
+        elif isinstance(x, str):
+            if x[0] == '"' and x[-1] == '"':
+                return x[1:-1]
+            return x
+        elif isinstance(x, int):
             return x
         else:
-            raise Exception('not a tuple or a string in parse_value')
+            raise Exception('not a tuple, string, or int in parse_value')
 
     def __stringify(self, x) -> str | NoReturn:
         if x is True:
