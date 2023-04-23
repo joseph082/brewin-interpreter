@@ -452,5 +452,5 @@ def main():
     program_interpreter = Interpreter()
     program_interpreter.run(program_source)
 
-
-main()
+if __name__ == '__main__':
+    main()
