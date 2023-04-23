@@ -1,7 +1,7 @@
 from intbase import InterpreterBase, ErrorType
 from bparser import BParser, StringWithLineNumber
 
-from typing import TypeGuard, Union, List, Tuple, Any
+from typing import TypeGuard, Union, List, Tuple, Any, NoReturn
 
 
 # https://devblogs.microsoft.com/python/pylance-introduces-five-new-features-that-enable-type-magic-for-python-developers/
@@ -15,6 +15,8 @@ PrintStatementType = Tuple[StringWithLineNumber, *PrintArgsType]
 
 InputStringStatementType = Tuple[StringWithLineNumber, StringWithLineNumber]
 InputIntStatementType = Tuple[StringWithLineNumber, StringWithLineNumber]
+
+SetStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, StringWithLineNumber]
 
 StatementType = Tuple[Any, *Tuple[Any, ...]]
 
@@ -43,6 +45,10 @@ def is_input_str_statement(s: StatementType) -> TypeGuard[InputStringStatementTy
 
 def is_input_int_statement(s: StatementType) -> TypeGuard[InputIntStatementType]:
     return s[0] == InterpreterBase.INPUT_INT_DEF  # and is_StringWithLineNumber(s[1])
+
+
+def is_set_statement(s: StatementType) -> TypeGuard[SetStatementType]:
+    return s[0] == InterpreterBase.SET_DEF
 
 
 def is_call_statement(s: StatementType) -> bool:
@@ -198,6 +204,8 @@ class ObjectDefinition:
             # result = self.__execute_return_statement(statement)
         elif is_begin_statement(statement):
             self.__execute_all_sub_statements_of_begin_statement(statement)
+        elif is_set_statement(statement):
+            self.__execute_set_statement(statement)
 
         return result
 
@@ -207,38 +215,10 @@ class ObjectDefinition:
             if is_statement(a):
                 # execute statement
                 res = self.__run_statement(a)
-                if res is True:
-                    output_str += InterpreterBase.TRUE_DEF
-                elif res is False:
-                    output_str += InterpreterBase.FALSE_DEF
-                # elif res is None:
-                #     output_str += Interpreter.NULL_DEF
-                # barista prints 'None' and idt any test case tests on this
-                else:
-                    output_str += str(res)
+                if res is not None:
+                    output_str += self.__stringify(res)
             elif is_StringWithLineNumber(a):
-                try:
-                    int_val = int(a)
-                    output_str += str(int_val)
-                    continue
-                except ValueError:
-                    pass
-                except Exception as e:
-                    raise (e)  # unexpected exception
-
-                if a[0] == '"' and a[-1] == '"':
-                    output_str += a[1:-1]  # remove quotes
-                elif a == InterpreterBase.TRUE_DEF or a == InterpreterBase.FALSE_DEF:
-                    output_str += a
-                elif a[0] != '"' and a[-1] != '"':  # variable
-                    if a in self.__current_method.params:
-                        output_str += str(self.__current_method.params[a])
-                    else:
-                        output_str += str(self.__obj_fields[a].curr_val)
-                else:
-                    raise Exception('unknown print argument string')
-            else:
-                raise Exception('not a tuple or a string in print statement')
+                output_str += self.__stringify(a)
         self.interpreter.output(output_str)
         return
 
@@ -269,6 +249,79 @@ class ObjectDefinition:
         for sub_statement in statement:
             self.__run_statement(sub_statement)
         return
+
+    def __execute_set_statement(self, statement: SetStatementType) -> None:
+        var_name = statement[1]
+        res = None
+        res = self.__parse_value(statement[2])
+        # if is_statement(statement[2]):
+        #     # execute statement
+        #     res = self.__run_statement(statement[2])
+        if var_name in self.__current_method.params:
+            self.__current_method.params[var_name] = res
+        else:
+            self.__obj_fields[var_name].curr_val = res
+        return
+
+    def __parse_value(self, x: StatementType | StringWithLineNumber) -> int | StringWithLineNumber | bool | str | NoReturn:
+        if is_statement(x):
+            res = self.__run_statement(x)
+            if res is None:
+                raise Exception('__parse called with None')
+            return self.__parse_value(res)
+        elif is_StringWithLineNumber(x):
+            try:
+                i = int(x)
+                return i
+            except ValueError:
+                pass
+            except Exception as e:
+                raise (e)  # unexpected exception
+            if x[0] == '"' and x[-1] == '"':
+                return x[1:-1]  # remove quotes
+            if x == InterpreterBase.TRUE_DEF:
+                return True
+            if x == InterpreterBase.FALSE_DEF:
+                return False
+            if x[0] != '"' and x[-1] != '"':  # variable
+                if x in self.__current_method.params:
+                    return self.__current_method.params[x]
+                return self.__obj_fields[x].curr_val
+            else:
+                raise Exception('unknown string as parse_value argument')
+        else:
+            raise Exception('not a tuple or a string in parse_value')
+
+    def __stringify(self, x) -> str | NoReturn:
+        if x is True:
+            return InterpreterBase.TRUE_DEF
+        if x is False:
+            return InterpreterBase.FALSE_DEF
+        # if x is None:
+        #     output_str += Interpreter.NULL_DEF
+        # barista prints 'None' and idt any test case tests on this
+        if isinstance(x, int):
+            return str(x)
+        if isinstance(x, str):
+            try:
+                int_val = int(x)
+                return str(int_val)
+            except ValueError:
+                pass
+            except Exception as e:
+                raise e  # unexpected exception
+
+            if x[0] == '"' and x[-1] == '"':
+                return x[1:-1]  # remove quotes
+            if x == InterpreterBase.TRUE_DEF or x == InterpreterBase.FALSE_DEF:
+                return x
+            if x[0] != '"' and x[-1] != '"':  # variable
+                if x in self.__current_method.params:
+                    return self.__stringify(self.__current_method.params[x])
+                return self.__stringify(self.__obj_fields[x].curr_val)
+            raise Exception('unknown string in stringify')
+        else:
+            raise Exception(x, type(x), 'called stringify with invalid type.')
 
 
 """
@@ -419,6 +472,9 @@ def main():
  (field y "test")
  (method main ()
   (begin
+   (set x "s")
+   (set x true)
+   (print x)
    (print "literal" 1 true false)
    (inputi x)
    (print x)
@@ -451,6 +507,7 @@ def main():
 
     program_interpreter = Interpreter()
     program_interpreter.run(program_source)
+
 
 if __name__ == '__main__':
     main()
