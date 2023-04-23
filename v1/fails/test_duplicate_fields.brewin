@@ -1,0 +1,9 @@
+(class main
+    (field x 0)
+    (field x 0)
+ (method main ()
+  (begin
+		(print (+ 100 "abc"))
+  )
+ )
+)
