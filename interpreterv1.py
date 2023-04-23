@@ -264,7 +264,7 @@ class ObjectDefinition:
         return
 
     def __execute_all_sub_statements_of_begin_statement(self, statement: BeginStatementType) -> None:
-        for sub_statement in statement:
+        for sub_statement in statement[1:]:
             self.__run_statement(sub_statement)
         return
 
