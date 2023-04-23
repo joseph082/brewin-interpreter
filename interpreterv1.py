@@ -30,6 +30,7 @@ FieldValueType = Union[int, StringWithLineNumber, bool, None, str]  # 'null' == 
 FieldStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, StringWithLineNumber]
 MethodOrFieldType = Union[MethodStatementType, FieldStatementType]
 
+CallExpressionType = Tuple[StringWithLineNumber, StringWithLineNumber, StringWithLineNumber, StatementType, *Tuple[StatementType, ...]]  # expression instead of statement
 ClassMembersType = Tuple[MethodOrFieldType, *Tuple[MethodOrFieldType, ...]]
 
 # ClassStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, MethodOrFieldType, *Tuple[MethodOrFieldType, ...]]
@@ -54,7 +55,7 @@ def is_set_statement(s: StatementType) -> TypeGuard[SetStatementType]:
     return s[0] == InterpreterBase.SET_DEF
 
 
-def is_call_statement(s: StatementType) -> TypeGuard[IfStatementType]:
+def is_call_expression(s: StatementType) -> TypeGuard[CallExpressionType]:
     return s[0] == InterpreterBase.CALL_DEF
 
 
@@ -174,13 +175,13 @@ class ObjectDefinition:
         return
     # Interpret the specified method using the provided parameters
 
-    def __find_method(self, method_name: str) -> Method:
-        # if method_name not in self.obj_methods:
-        #     self.interpreter.error(ErrorType.NAME_ERROR, line_num=3)
+    def __find_method(self, method_name: str, line_num: int) -> Method | None:
+        if method_name not in self.obj_methods:
+            self.interpreter.error(ErrorType.NAME_ERROR, line_num=line_num)
+            return
         return self.obj_methods[method_name]
 
     def add_method(self, name, method: Method) -> None:
-        # print(type (method))
         self.obj_methods[name] = method
         return
 
@@ -188,9 +189,16 @@ class ObjectDefinition:
         self.__obj_fields[name] = Field(name, initial_val)
         return
 
-    def call_method(self, method_name: str, parameters=()):
-        method = self.__find_method(method_name)
+    def call_method(self, method_name: str | StringWithLineNumber, line_num: int, parameters=()):
+        method = self.__find_method(method_name, line_num)
+        if method is None:
+            return
         self.__current_method = method
+        if len(parameters) != len(method.params):
+            self.interpreter.error(ErrorType.TYPE_ERROR)
+            return
+        for i, p in enumerate(method.params):
+            method.params[p] = parameters[i]
         statement = method.get_top_level_statement()
         result = self.__run_statement(statement)
         return result
@@ -198,6 +206,8 @@ class ObjectDefinition:
     # gets the result, if any
 
     def __run_statement(self, statement):
+        if not is_statement(statement):
+            raise Exception('unexpected statement/expr {statement}')
         print(f'running statement: {statement}')
         result = None
         if is_print_statement(statement):
@@ -206,9 +216,10 @@ class ObjectDefinition:
             self.__execute_input_str_statement(statement)
         elif is_input_int_statement(statement):
             self.__execute_input_int_statement(statement)
-        elif is_call_statement(statement):
-            pass
-            # result = self.__execute_call_statement(statement)
+        elif is_call_expression(statement):
+            current_method = self.__current_method
+            result = self.__execute_call_expression(statement)
+            self.__current_method = current_method
         elif is_while_statement(statement):
             self.__execute_while_statement(statement)
         elif is_if_statement(statement):
@@ -390,6 +401,16 @@ class ObjectDefinition:
         self.interpreter.error(ErrorType.TYPE_ERROR, line_num=expr[0].line_num)
         return False
 
+    def __execute_call_expression(self, expr: CallExpressionType):
+        call_str = expr[0]
+        if is_StringWithLineNumber(call_str) and is_StringWithLineNumber(expr[2]) and call_str.line_num is not None:
+            if expr[1] == InterpreterBase.ME_DEF:
+                obj_instance = self
+                return self.call_method(expr[2], call_str.line_num, tuple(map(self.__parse_value, expr[3:])))
+            else:
+                obj_instance = self.__obj_fields[expr[1]].curr_val
+            return obj_instance.call_method(expr[2], call_str.line_num, tuple(map(self.__parse_value, expr[3:])))
+
 
 """
 ● Methods and fields may be defined in any order within the class; all methods and fields
@@ -493,7 +514,7 @@ class Interpreter(InterpreterBase):
         obj = class_def.instantiate_object()
 
         # obj.run_method("main")
-        obj.call_method(InterpreterBase.MAIN_FUNC_DEF)  # has no params
+        obj.call_method(InterpreterBase.MAIN_FUNC_DEF, -1)  # has no params
 
 
 # def test():
