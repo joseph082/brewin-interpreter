@@ -13,7 +13,11 @@ from typing import TypeGuard, Union, List, Tuple, Any
 PrintArgsType = Tuple[int | bool | str | StringWithLineNumber, ...]
 PrintStatementType = Tuple[StringWithLineNumber, *PrintArgsType]
 
-StatementType = Tuple[Any]
+InputStringStatementType = Tuple[StringWithLineNumber, StringWithLineNumber]
+InputIntStatementType = Tuple[StringWithLineNumber, StringWithLineNumber]
+
+
+StatementType = Tuple[Any, *Tuple[Any, ...]]
 
 MethodStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, Tuple[StringWithLineNumber], StatementType]
 FieldValueType = Union[int, StringWithLineNumber, bool, None]  # 'null' == None? # maybe add str too?
@@ -28,44 +32,44 @@ ClassStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, *ClassMem
 ParsedProgramType = Tuple[ClassStatementType, *Tuple[ClassStatementType, ...]]  # tuple of class statements
 
 
-def is_a_print_statement(statement: StatementType) -> TypeGuard[PrintStatementType]:
-    return statement[0] == InterpreterBase.PRINT_DEF
+def is_print_statement(s: StatementType) -> TypeGuard[PrintStatementType]:
+    return s[0] == InterpreterBase.PRINT_DEF
 
 
-def is_an_input_str_statement(statement: StatementType) -> bool:
-    return statement[0] == InterpreterBase.INPUT_STRING_DEF
+def is_input_str_statement(s: StatementType) -> TypeGuard[InputStringStatementType]:
+    return s[0] == InterpreterBase.INPUT_STRING_DEF  # and is_StringWithLineNumber(s[1])
 
 
-def is_an_input_int_statement(statement: StatementType) -> bool:
-    return statement[0] == InterpreterBase.INPUT_INT_DEF
+def is_input_int_statement(s: StatementType) -> TypeGuard[InputIntStatementType]:
+    return s[0] == InterpreterBase.INPUT_INT_DEF  # and is_StringWithLineNumber(s[1])
 
 
-def is_a_call_statement(statement: StatementType) -> bool:
-    return statement[0] == InterpreterBase.CALL_DEF
+def is_call_statement(s: StatementType) -> bool:
+    return s[0] == InterpreterBase.CALL_DEF
 
 
-def is_a_while_statement(statement: StatementType) -> bool:
-    return statement[0] == InterpreterBase.WHILE_DEF
+def is_while_statement(s: StatementType) -> bool:
+    return s[0] == InterpreterBase.WHILE_DEF
 
 
-def is_an_if_statement(statement: StatementType) -> bool:
-    return statement[0] == InterpreterBase.IF_DEF
+def is_if_statement(s: StatementType) -> bool:
+    return s[0] == InterpreterBase.IF_DEF
 
 
-def is_a_begin_statement(statement: StatementType) -> bool:
-    return statement[0] == InterpreterBase.BEGIN_DEF
+def is_begin_statement(s: StatementType) -> bool:
+    return s[0] == InterpreterBase.BEGIN_DEF
 
 
-def is_a_return_statement(statement: StatementType) -> bool:
-    return statement[0] == InterpreterBase.RETURN_DEF
+def is_return_statement(s: StatementType) -> bool:
+    return s[0] == InterpreterBase.RETURN_DEF
 
 
-def is_field_type(statement) -> TypeGuard[FieldValueType]:
-    return isinstance(statement, bool) or isinstance(statement, int) or isinstance(statement, str) or isinstance(statement, StringWithLineNumber)
+def is_field_type(s) -> TypeGuard[FieldValueType]:
+    return isinstance(s, (bool, int, str, StringWithLineNumber))
 
 
-def is_StringWithLineNumber(statement) -> TypeGuard[StringWithLineNumber]:
-    return isinstance(statement, StringWithLineNumber)
+def is_StringWithLineNumber(s) -> TypeGuard[StringWithLineNumber]:
+    return isinstance(s, StringWithLineNumber)
 
 
 # def is_parsed_program_type(p) -> TypeGuard[ParsedProgramType]:
@@ -169,26 +173,25 @@ class ObjectDefinition:
     def __run_statement(self, statement):
         print(f'statement: {statement}')
         result = None
-        if is_a_print_statement(statement):
+        if is_print_statement(statement):
             result = self.__execute_print_statement(statement)
-        elif is_an_input_str_statement(statement):
-
+        elif is_input_str_statement(statement):
             result = self.__execute_input_str_statement(statement)
-        elif is_an_input_int_statement(statement):
+        elif is_input_int_statement(statement):
             result = self.__execute_input_int_statement(statement)
-        elif is_a_call_statement(statement):
+        elif is_call_statement(statement):
             pass
             # result = self.__execute_call_statement(statement)
-        elif is_a_while_statement(statement):
+        elif is_while_statement(statement):
             pass
             # result = self.__execute_while_statement(statement)
-        elif is_an_if_statement(statement):
+        elif is_if_statement(statement):
             pass
             # result = self.__execute_if_statement(statement)
-        elif is_a_return_statement(statement):
+        elif is_return_statement(statement):
             pass
             # result = self.__execute_return_statement(statement)
-        elif is_a_begin_statement(statement):
+        elif is_begin_statement(statement):
             pass
             # result = self.__execute_all_sub_statements_of_begin_statement(statement)
         #
