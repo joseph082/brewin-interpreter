@@ -33,6 +33,7 @@ MethodOrFieldType = Union[MethodStatementType, FieldStatementType]
 
 CallExpressionType = Tuple[StringWithLineNumber, StringWithLineNumber, StringWithLineNumber, StatementType, *Tuple[StatementType, ...]]  # expression instead of statement
 NewExpressionType = Tuple[StringWithLineNumber, StringWithLineNumber]
+ReturnExpressionType = Union[Tuple[StringWithLineNumber], Tuple[StringWithLineNumber, StatementType]]
 ClassMembersType = Tuple[MethodOrFieldType, *Tuple[MethodOrFieldType, ...]]
 
 # ClassStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, MethodOrFieldType, *Tuple[MethodOrFieldType, ...]]
@@ -77,7 +78,7 @@ def is_begin_statement(s: StatementType) -> TypeGuard[BeginStatementType]:
     return s[0] == InterpreterBase.BEGIN_DEF
 
 
-def is_return_statement(s: StatementType) -> bool:
+def is_return_statement(s: StatementType) -> TypeGuard[ReturnExpressionType]:
     return s[0] == InterpreterBase.RETURN_DEF
 
 
@@ -132,6 +133,11 @@ def is_int_string_comparison_expression(e) -> TypeGuard[IntStringComparisonExpre
 
 def is_equality_comparison_expression(e) -> TypeGuard[EqualityComparisonExpressionType]:
     return e[0] == '==' or e[0] == '!='
+
+
+class Nothing:
+    def __init__(self) -> None:
+        return
 
 
 class Method:
@@ -237,8 +243,7 @@ class ObjectDefinition:
         elif is_if_statement(statement):
             self.__execute_if_statement(statement)
         elif is_return_statement(statement):
-            pass
-            # result = self.__execute_return_statement(statement)
+            result = self.__execute_return_expression(statement)
         elif is_begin_statement(statement):
             self.__execute_all_sub_statements_of_begin_statement(statement)
         elif is_set_statement(statement):
@@ -307,7 +312,7 @@ class ObjectDefinition:
             self.interpreter.error(ErrorType.NAME_ERROR, line_num=statement[0].line_num)
         return
 
-    def __parse_value(self, x: StatementType | StringWithLineNumber | str | int | Self) -> int | StringWithLineNumber | bool | str | Self | NoReturn:
+    def __parse_value(self, x: StatementType | StringWithLineNumber | str | int | Self | Nothing) -> int | StringWithLineNumber | bool | str | Self | Nothing | NoReturn:
         # https://stackoverflow.com/a/70932112 for Self
         if is_statement(x):
             res = self.__run_statement(x)
@@ -337,7 +342,7 @@ class ObjectDefinition:
             if x[0] == '"' and x[-1] == '"':
                 return x[1:-1]
             return x
-        elif isinstance(x, (int, ObjectDefinition)):
+        elif isinstance(x, (int, ObjectDefinition, Nothing)):
             return x
         else:
             raise Exception('not a tuple, string, or int in parse_value')
@@ -446,6 +451,11 @@ class ObjectDefinition:
             return
         return self.interpreter.classes[expr[1]].instantiate_object()
 
+    def __execute_return_expression(self, expr: ReturnExpressionType):
+        if len(expr) == 1:
+            return self.interpreter.nothing
+        return self.__run_statement(expr[1])
+
 
 """
 ● Methods and fields may be defined in any order within the class; all methods and fields
@@ -505,6 +515,7 @@ class Interpreter(InterpreterBase):
         super().__init__(console_output, inp)  # call InterpreterBase’s constructor
 
         self.classes = {}  # self.classes = dict[StringWithLineNumber, Any]. doesn't work with in
+        self.nothing = Nothing()
         return
 
     def __discover_all_classes_and_track_them(self, parsed_program: ParsedProgramType) -> None:

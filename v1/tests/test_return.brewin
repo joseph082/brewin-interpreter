@@ -1,0 +1,9 @@
+(class main
+(method foo (q)
+(return (+ 10 q))) # returns the value of 3*q
+(method main ()
+(begin (print (call me foo 5))
+ (print 10)
+)
+)
+)
