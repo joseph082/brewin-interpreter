@@ -301,6 +301,9 @@ class ObjectDefinition:
     def __execute_set_statement(self, statement: SetStatementType) -> None:
         var_name = statement[1]
         res = self.__parse_value(statement[2])
+        if isinstance(res, Nothing):
+            self.interpreter.error(ErrorType.TYPE_ERROR, line_num=statement[0].line_num)
+            return
         # if is_statement(statement[2]):
         #     # execute statement
         #     res = self.__run_statement(statement[2])
