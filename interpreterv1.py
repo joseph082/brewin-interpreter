@@ -150,9 +150,6 @@ class Method:
 
         return
 
-    def mutate(self):
-        self.name = StringWithLineNumber('asdf', 0)
-
     def get_top_level_statement(self):
         return self.expr
 
@@ -163,11 +160,9 @@ class Method:
 class Field:
     def __init__(self, name: StringWithLineNumber, val) -> None:
         self.name = name
-        if is_field_type(val):
-            self.curr_val = val
-            self.init_val = val
-        else:
-            raise Exception('invalid field value')
+        assert is_field_type(val), 'invalid field value'
+        self.curr_val = val
+        self.init_val = val
         return
 
     def get_name(self) -> StringWithLineNumber:
@@ -189,7 +184,6 @@ class ObjectDefinition:
         self.__obj_fields = {}
         self.interpreter = interpreter
         return
-    # Interpret the specified method using the provided parameters
 
     def __find_method(self, method_name: str, line_num: int) -> Method | None:
         if method_name not in self.obj_methods:
@@ -205,6 +199,7 @@ class ObjectDefinition:
         self.__obj_fields[name] = Field(name, initial_val)
         return
 
+    # Interpret the specified method using the provided parameters
     def call_method(self, method_name: str | StringWithLineNumber, line_num: int, parameters=()):
         method = self.__find_method(method_name, line_num)
         if method is None:
@@ -218,12 +213,11 @@ class ObjectDefinition:
         statement = method.get_top_level_statement()
         result = self.__run_statement(statement)
         return result
+
     # runs/interprets the passed-in statement until completion and
     # gets the result, if any
-
     def __run_statement(self, statement):
-        if not is_statement(statement):
-            raise Exception('unexpected statement/expr {statement}')
+        assert is_statement(statement), f'unexpected statement/expr {statement}'
         print(f'running statement: {statement}')
         result = self.interpreter.nothing
         if is_print_statement(statement):
@@ -274,8 +268,7 @@ class ObjectDefinition:
         # check function params, then class vars
         var_name = statement[1]
         input = self.interpreter.get_input()
-        if not isinstance(input, str):
-            raise TypeError("input isn't a str")
+        assert isinstance(input, str), "input isn't a str"
         if var_name in self.__current_method.params:
             self.__current_method.params[var_name] = input
         else:
@@ -285,8 +278,7 @@ class ObjectDefinition:
     def __execute_input_int_statement(self, statement: InputIntStatementType) -> None:
         var_name = statement[1]
         input = self.interpreter.get_input()
-        if not isinstance(input, str):
-            raise TypeError("input isn't a str")
+        assert isinstance(input, str), "input isn't a str"
         if var_name in self.__current_method.params:
             self.__current_method.params[var_name] = input
         else:
@@ -304,9 +296,6 @@ class ObjectDefinition:
         if isinstance(res, Nothing):
             self.interpreter.error(ErrorType.TYPE_ERROR, line_num=statement[0].line_num)
             return
-        # if is_statement(statement[2]):
-        #     # execute statement
-        #     res = self.__run_statement(statement[2])
         if var_name in self.__current_method.params:
             self.__current_method.params[var_name] = res
         elif var_name in self.__obj_fields:
@@ -319,8 +308,7 @@ class ObjectDefinition:
         # https://stackoverflow.com/a/70932112 for Self
         if is_statement(x):
             res = self.__run_statement(x)
-            if res is None:
-                raise Exception('__parse_val called with None')
+            assert res is not None, '__parse_val called with None'
             return self.__parse_value(res)
         elif is_StringWithLineNumber(x):
             try:
@@ -335,12 +323,11 @@ class ObjectDefinition:
                 return True
             if x == InterpreterBase.FALSE_DEF:
                 return False
-            if x[0] != '"' and x[-1] != '"':  # variable
-                if x in self.__current_method.params:
-                    return self.__current_method.params[x]
-                return self.__obj_fields[x].curr_val
-            else:
-                raise Exception(f'unknown StringWithLineNumber as parse_value argument: {x}')
+            assert x[0] != '"' and x[-1] != '"', f'unknown StringWithLineNumber as parse_value argument: {x}'
+            # variable
+            if x in self.__current_method.params:
+                return self.__current_method.params[x]
+            return self.__obj_fields[x].curr_val
         elif isinstance(x, str):
             if x[0] == '"' and x[-1] == '"':
                 return x[1:-1]
@@ -373,17 +360,17 @@ class ObjectDefinition:
                 return x[1:-1]  # remove quotes
             if x == InterpreterBase.TRUE_DEF or x == InterpreterBase.FALSE_DEF:
                 return x
-            if x[0] != '"' and x[-1] != '"':  # variable
-                if x in self.__current_method.params:
-                    value = self.__current_method.params[x]
-                else:
-                    value = self.__obj_fields[x].curr_val
-                if isinstance(value, str):
-                    return value
+            assert x[0] != '"' and x[-1] != '"', 'unknown string in stringify'
+            # variable
+            if x in self.__current_method.params:
+                value = self.__current_method.params[x]
+            else:
+                value = self.__obj_fields[x].curr_val
+            if isinstance(value, str):
+                return value
 
-                return self.__stringify(value)
+            return self.__stringify(value)
 
-            raise Exception('unknown string in stringify')
         else:
             raise Exception(x, type(x), 'called stringify with invalid type.')
 
@@ -460,15 +447,6 @@ class ObjectDefinition:
         return self.__run_statement(expr[1])
 
 
-"""
-● Methods and fields may be defined in any order within the class; all methods and fields
-are visible to all other methods inside the class regardless of the order they are defined
-● Duplicate class names are not allowed. If a program defines two or more classes with
-the same name you must generate an error of type ErrorType.NAME_ERROR by calling
-InterpreterBase.error().
-"""
-
-
 class ClassDefinition:
     # constructor for a ClassDefinition
     def __init__(self, fields_or_methods: ClassMembersType, interpreter: 'Interpreter') -> None:  # https://stackoverflow.com/questions/33837918/type-hints-solve-circular-dependency
@@ -499,11 +477,10 @@ class ClassDefinition:
                 self.my_fields[name] = Field(name, field_val)
             else:
                 raise Exception('fields_or_methods expr: {expr} not parsed')
-        if len(self.my_methods) == 0:
-            raise Exception('no methods in class')
+        assert len(self.my_methods) != 0, 'no methods in class'
         return
-    # uses the definition of a class to create and return an instance of it
 
+    # uses the definition of a class to create and return an instance of it
     def instantiate_object(self) -> ObjectDefinition:
         obj = ObjectDefinition(self.interpreter)
         for name, method in self.my_methods.items():
@@ -525,8 +502,7 @@ class Interpreter(InterpreterBase):
         for expr in parsed_program:
             if is_class_statement(expr):
                 class_name = expr[1]
-                if not is_StringWithLineNumber(class_name):  # also doesn't get correct type
-                    raise Exception('not is_StringWithLineNumber')
+                assert is_StringWithLineNumber(class_name)
                 fields_or_methods = expr[2:]  # doesn't get correct type so use typeguard
                 if not is_class_members_type(fields_or_methods):
                     return
@@ -541,12 +517,10 @@ class Interpreter(InterpreterBase):
         return
 
     def __find_definition_for_class(self, class_name: str) -> ClassDefinition:
-        if class_name not in self.classes:
-            raise Exception(f'__find_definition_for_class class_name {class_name} not in self.classes')
+        assert class_name in self.classes, f'__find_definition_for_class class_name {class_name} not in self.classes'
         return self.classes[class_name]
 
     def run(self, program_source: list[str]) -> None:  # def run(self, program):
-
         # parse the program into a more easily processed form
         result, parsed_program = BParser.parse(program_source)
         if result == False:
@@ -562,13 +536,8 @@ class Interpreter(InterpreterBase):
         class_def = self.__find_definition_for_class(InterpreterBase.MAIN_CLASS_DEF)
         obj = class_def.instantiate_object()
 
-        # obj.run_method("main")
         obj.call_method(InterpreterBase.MAIN_FUNC_DEF, -1)  # has no params
 
-
-# def test():
-#     print('test', is_parsed_program_type(''), is_parsed_program_type(['']), is_parsed_program_type([StringWithLineNumber('', 0)]),
-#           is_parsed_program_type(StringWithLineNumber('', 0)), is_parsed_program_type([StringWithLineNumber('', 0), StringWithLineNumber('', 0), [StringWithLineNumber('', 0), [StringWithLineNumber('', 0), StringWithLineNumber('', 0)]]]),)
 
 def deep_tuple_helper(x):
     if isinstance(x, StringWithLineNumber):
@@ -598,23 +567,7 @@ def main():
                       ' (print "hello world!")',
                       ' ) # end of method',
                       ') # end of class']
-    program_source = """(class main
- (field x 0)
- (field y "test")
- (method main ()
-  (begin
-   (set x "s")
-   (set x true)
-   (print x)
-   (print "literal" 1 true false)
-   # (inputi x)
-   (inputs x)
-   (print x)
-   (inputi y)
-   (print y)
-  )
- )
-)""".split('\n')
+
     # this is how you use our BParser class to parse a valid
     # Brewin program into python list format.
     result, parsed_program = BParser.parse(program_source)
@@ -623,14 +576,6 @@ def main():
     else:
         print('Parsing failed. There must have been a mismatched parenthesis.')
 
-    # x: PrintStatementType = (StringWithLineNumber('d', 1), 'd')
-    # print(type(x))
-
-    # l = [Method(StringWithLineNumber('d', 1), [[], []])]
-    # lt = deeptuple(l)
-    # print(l[0], lt[0])
-    # l[0].mutate()
-    # print(l[0].get_name(), lt[0].get_name(), 'changed', id(l[0]), id(lt[0])) # points to same class instance
     # t = deeptuple(parsed_program[0])
     # print(parsed_program[0], t)
     # # parsed_program[0][2] = 'asdfad'
