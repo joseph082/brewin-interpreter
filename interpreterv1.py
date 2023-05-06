@@ -225,7 +225,7 @@ class ObjectDefinition:
         if not is_statement(statement):
             raise Exception('unexpected statement/expr {statement}')
         print(f'running statement: {statement}')
-        result = None
+        result = self.interpreter.nothing
         if is_print_statement(statement):
             self.__execute_print_statement(statement)
         elif is_input_str_statement(statement):
