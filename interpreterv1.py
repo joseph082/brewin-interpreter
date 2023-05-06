@@ -24,7 +24,7 @@ StatementType = Tuple[Any, *Tuple[Any, ...]]
 
 IfStatementType = Tuple[StringWithLineNumber, StatementType, StatementType, StatementType]  # second should be expression
 BeginStatementType = Tuple[StringWithLineNumber, Tuple[StatementType, *Tuple[StatementType]]]
-WhileStatementType = Tuple[StringWithLineNumber, StatementType, BeginStatementType]  # second should be expression
+WhileStatementType = Tuple[StringWithLineNumber, StatementType, StatementType]  # second should be expression
 
 MethodStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, Tuple[StringWithLineNumber], StatementType]
 FieldValueType = Union[int, StringWithLineNumber, bool, None, str]  # 'null' == None?
