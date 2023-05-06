@@ -1,0 +1,8 @@
+(class main
+ (field x null)
+ (method main ()
+
+  (set x (new c)
+  )
+ )
+)

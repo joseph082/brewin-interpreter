@@ -425,6 +425,9 @@ class ObjectDefinition:
             return obj_instance.call_method(expr[2], call_str.line_num, tuple(map(self.__parse_value, expr[3:])))
 
     def __execute_new_expression(self, expr: NewExpressionType):
+        if expr[1] not in self.interpreter.classes:
+            self.interpreter.error(ErrorType.TYPE_ERROR, line_num=expr[0].line_num)
+            return
         return self.interpreter.classes[expr[1]].instantiate_object()
 
 
