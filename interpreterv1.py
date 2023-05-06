@@ -121,6 +121,7 @@ def is_statement(s) -> TypeGuard[StatementType]:
 AddExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # +
 IntStringComparisonExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # <, >, <=, >=
 EqualityComparisonExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # ==, !=
+ArithmeticExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # -, *, /, %
 
 
 def is_add_expression(e) -> TypeGuard[AddExpressionType]:
@@ -133,6 +134,10 @@ def is_int_string_comparison_expression(e) -> TypeGuard[IntStringComparisonExpre
 
 def is_equality_comparison_expression(e) -> TypeGuard[EqualityComparisonExpressionType]:
     return e[0] == '==' or e[0] == '!='
+
+
+def is_arithmetic_expression(e) -> TypeGuard[ArithmeticExpressionType]:
+    return e[0] == '-' or e[0] == '*' or e[0] == '/' or e[0] == '%'
 
 
 class Nothing:
@@ -244,6 +249,8 @@ class ObjectDefinition:
             self.__execute_set_statement(statement)
         elif is_add_expression(statement):
             result = self.__execute_add_expression(statement)
+        elif is_arithmetic_expression(statement):
+            result = self.__execute_arithmetic_expression(statement)
         elif is_int_string_comparison_expression(statement):
             result = self.__execute_int_string_comparison_expression(statement)
         elif is_equality_comparison_expression(statement):
@@ -401,6 +408,17 @@ class ObjectDefinition:
             return f'"{a}{b}"'  # return with quotes to mark this as literal instead of a var
         self.interpreter.error(ErrorType.TYPE_ERROR, line_num=expr[0].line_num)
         return "_"
+
+    def __execute_arithmetic_expression(self, expr: ArithmeticExpressionType) -> int:
+        a = self.__parse_value(expr[1])
+        b = self.__parse_value(expr[2])
+        if not isinstance(a, int) or not isinstance(b, int):
+            self.interpreter.error(ErrorType.TYPE_ERROR, line_num=expr[0].line_num)
+            return 0
+        arithmetic_functions = {'-': lambda x, y: x - y, '*': lambda x, y: x * y,
+                                '/': lambda x, y: x // y, '%': lambda x, y: x % y
+                                }
+        return arithmetic_functions[expr[0]](a, b)
 
     def __execute_int_string_comparison_expression(self, expr: IntStringComparisonExpressionType) -> bool:
         a = self.__parse_value(expr[1])
