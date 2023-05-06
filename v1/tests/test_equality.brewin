@@ -1,0 +1,12 @@
+(class main
+(method main ()
+(begin
+(print (== 5 5))
+(print (!= 5 5))
+(print (== "a" "a"))
+(print (!= "a" "a"))
+(print (!= true false))
+(print (== true false))
+)
+)
+)

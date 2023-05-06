@@ -117,9 +117,9 @@ def is_statement(s) -> TypeGuard[StatementType]:
     return isinstance(s, tuple)
 
 
-AddExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]
+AddExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # +
 IntStringComparisonExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # <, >, <=, >=
-EqualityComparisonExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]
+EqualityComparisonExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # ==, !=
 
 
 def is_add_expression(e) -> TypeGuard[AddExpressionType]:
@@ -128,6 +128,10 @@ def is_add_expression(e) -> TypeGuard[AddExpressionType]:
 
 def is_int_string_comparison_expression(e) -> TypeGuard[IntStringComparisonExpressionType]:
     return e[0] == '<' or e[0] == '>' or e[0] == '<=' or e[0] == '>='
+
+
+def is_equality_comparison_expression(e) -> TypeGuard[EqualityComparisonExpressionType]:
+    return e[0] == '==' or e[0] == '!='
 
 
 class Method:
@@ -243,6 +247,8 @@ class ObjectDefinition:
             result = self.__execute_add_expression(statement)
         elif is_int_string_comparison_expression(statement):
             result = self.__execute_int_string_comparison_expression(statement)
+        elif is_equality_comparison_expression(statement):
+            result = self.__execute_equality_comparison_expression(statement)
 
         return result
 
@@ -409,6 +415,16 @@ class ObjectDefinition:
                                 }
         if (isinstance(a, int) and isinstance(b, int)) or (isinstance(a, str) and isinstance(b, str)):
             return comparison_functions[expr[0]](a, b)
+        self.interpreter.error(ErrorType.TYPE_ERROR, line_num=expr[0].line_num)
+        return False
+
+    def __execute_equality_comparison_expression(self, expr: EqualityComparisonExpressionType) -> bool:
+        a = self.__parse_value(expr[1])
+        b = self.__parse_value(expr[2])
+        if (isinstance(a, int) and isinstance(b, int)) or (isinstance(a, str) and isinstance(b, str)) or (isinstance(a, bool) and isinstance(b, bool)):
+            if expr[0] == '==':
+                return a == b
+            return a != b
         self.interpreter.error(ErrorType.TYPE_ERROR, line_num=expr[0].line_num)
         return False
 
