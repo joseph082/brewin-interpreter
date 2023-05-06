@@ -508,7 +508,7 @@ class Interpreter(InterpreterBase):
                     return
                 # print(id(fields_or_methods[0]), id(expr[2]))  # same ids
                 if class_name in self.classes:
-                    super().error(ErrorType.NAME_ERROR, line_num=class_name.line_num)  # TODO
+                    super().error(ErrorType.TYPE_ERROR, line_num=class_name.line_num)
                     return
                 self.classes[class_name] = ClassDefinition(fields_or_methods, self)
 
