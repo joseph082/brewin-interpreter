@@ -1,4 +1,6 @@
+(class p (method main () (return)))
 (class main
+(field obj null)
 (method main ()
 (begin
 (print (== 5 5))
@@ -7,6 +9,11 @@
 (print (!= "a" "a"))
 (print (!= true false))
 (print (== true false))
+(set obj (new p))
+(print (== obj null))
+(print (!= obj null))
+(print (== null obj))
+(print (!= null obj))
 )
 )
 )

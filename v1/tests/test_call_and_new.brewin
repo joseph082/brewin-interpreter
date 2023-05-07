@@ -24,9 +24,10 @@
 (call p init name 25) # call init in object pointed to by p
 # and param is evaluated in this method
  (call me tell_joke "Matt") # test __current_method after a call expression
-(call p talk "Paul") # call talk in object pointed to by p
+(call p talk (+ "Pa" "ul")) # call talk in object pointed to by p
  (call me tell_joke "Matt") # test __current_method after a call expression
-
+(print (== p null))
+(print (!= p null))
 )
 )
 )

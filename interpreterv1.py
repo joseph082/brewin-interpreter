@@ -474,10 +474,16 @@ class ObjectDefinition:
     def __execute_equality_comparison_expression(self, expr: EqualityComparisonExpressionType) -> bool:
         a = self.__parse_value(expr[1])
         b = self.__parse_value(expr[2])
-        if (isinstance(a, int) and isinstance(b, int)) or (isinstance(a, str) and isinstance(b, str)) or (isinstance(a, bool) and isinstance(b, bool)):
+        if ((isinstance(a, int) and isinstance(b, int)) or (isinstance(a, str) and isinstance(b, str)) or
+                (isinstance(a, bool) and isinstance(b, bool))):
             if expr[0] == '==':
                 return a == b
             return a != b
+        if ((isinstance(a, ObjectDefinition) and b is None) or
+                (isinstance(b, ObjectDefinition) and a is None) or (a is None and b is None)):  #
+            if expr[0] == '==':
+                return a is b
+            return a is not b
         self.interpreter.error(ErrorType.TYPE_ERROR, line_num=expr[0].line_num)
         return False
 
