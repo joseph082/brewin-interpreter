@@ -159,6 +159,8 @@ class Nothing:
 class ReturnValue:
     def __init__(self, val) -> None:
         self.val = val
+        if isinstance(val, str):
+            self.val = f'"{val}"'  # DENOTE STRING LITERAL, so print knows # same as what add does
         return
 
 
