@@ -123,6 +123,7 @@ IntStringComparisonExpressionType = Tuple[StringWithLineNumber, StatementType, S
 EqualityComparisonExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # ==, !=
 ArithmeticExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # -, *, /, %
 BoolComparisonExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # &, |
+BoolUnaryExpressionType = Tuple[StringWithLineNumber, StatementType]  # !
 
 
 def is_add_expression(e) -> TypeGuard[AddExpressionType]:
@@ -143,6 +144,10 @@ def is_arithmetic_expression(e) -> TypeGuard[ArithmeticExpressionType]:
 
 def is_bool_comparison_expression(e) -> TypeGuard[BoolComparisonExpressionType]:
     return e[0] == '&' or e[0] == '|'
+
+
+def is_bool_unary_expression(e) -> TypeGuard[BoolUnaryExpressionType]:
+    return e[0] == '!'
 
 
 class Nothing:
@@ -262,6 +267,8 @@ class ObjectDefinition:
             result = self.__execute_equality_comparison_expression(statement)
         elif is_bool_comparison_expression(statement):
             result = self.__execute_bool_comparison_expression(statement)
+        elif is_bool_unary_expression(statement):
+            result = self.__execute_bool_unary_expression(statement)
         return result
 
     def __execute_print_statement(self, args: PrintStatementType) -> None:
@@ -456,6 +463,13 @@ class ObjectDefinition:
         if expr[0] == '&':
             return a and b
         return a or b
+
+    def __execute_bool_unary_expression(self, expr: BoolUnaryExpressionType) -> bool:
+        a = self.__parse_value(expr[1])
+        if not isinstance(a, bool):
+            self.interpreter.error(ErrorType.TYPE_ERROR, line_num=expr[0].line_num)
+            return False
+        return not a
 
     def __execute_call_expression(self, expr: CallExpressionType):
         call_str = expr[0]

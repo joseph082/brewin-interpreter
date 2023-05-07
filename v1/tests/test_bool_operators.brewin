@@ -9,6 +9,11 @@
 (print (| false true))
 (print (| true true))
 
+(print (! true))
+(print (! false))
+(print (! (! (! (! false) ))))
+(print (! (! (! (! true) ))))
+
 (return (+ 10 q)))
 
 ) # returns the value of 3*q
