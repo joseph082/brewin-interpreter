@@ -237,18 +237,21 @@ class ObjectDefinition:
         return
 
     # Interpret the specified method using the provided parameters
-    def call_method(self, method_name: str | StringWithLineNumber, line_num: int, parameters=()):
+    def call_method(self, method_name: str | StringWithLineNumber, line_num: int, parameters=()) -> ReturnValue:
         method = self.__find_method(method_name, line_num)
         if method is None:
+            return ReturnValue(self.interpreter.nothing)
         method = deepcopy(method)
         self.__current_method = method
         if len(parameters) != len(method.params):
             self.interpreter.error(ErrorType.TYPE_ERROR)
-            return
+            return ReturnValue(self.interpreter.nothing)
         for i, p in enumerate(method.params):
             method.params[p] = parameters[i]
         statement = method.get_top_level_statement()
         result = self.__run_statement(statement)
+        if not isinstance(result, ReturnValue):
+            return ReturnValue(result)
         return result
 
     # runs/interprets the passed-in statement until completion and
@@ -315,6 +318,8 @@ class ObjectDefinition:
         assert isinstance(input, str), "input isn't a str"
         if var_name in self.__current_method.params:
             self.__current_method.params[var_name] = input
+        elif var_name not in self.__obj_fields:
+            self.interpreter.error(ErrorType.NAME_ERROR, line_num=statement[0].line_num)
         else:
             self.__obj_fields[var_name].curr_val = input
         return
@@ -325,6 +330,8 @@ class ObjectDefinition:
         assert isinstance(input, str), "input isn't a str"
         if var_name in self.__current_method.params:
             self.__current_method.params[var_name] = int(input)
+        elif var_name not in self.__obj_fields:
+            self.interpreter.error(ErrorType.NAME_ERROR, line_num=statement[0].line_num)
         else:
             self.__obj_fields[var_name].curr_val = int(input)
         return
@@ -341,8 +348,7 @@ class ObjectDefinition:
         res = self.__parse_value(statement[2])
         if isinstance(res, Nothing):
             self.interpreter.error(ErrorType.TYPE_ERROR, line_num=statement[0].line_num)
-            return
-        if var_name in self.__current_method.params:
+        elif var_name in self.__current_method.params:
             self.__current_method.params[var_name] = res
         elif var_name in self.__obj_fields:
             self.__obj_fields[var_name].curr_val = res
@@ -355,6 +361,8 @@ class ObjectDefinition:
         if is_statement(x):
             res = self.__run_statement(x)
             assert res is not None, '__parse_val called with statement that returns None'
+            if isinstance(res, ReturnValue):  # (UN)COMMENTING THIS BLOCK DOESN"T AFFECT 47/50
+                return res
             return self.__parse_value(res)
         elif is_StringWithLineNumber(x):
             try:
@@ -375,6 +383,9 @@ class ObjectDefinition:
             # variable
             if x in self.__current_method.params:
                 return self.__current_method.params[x]
+            if x not in self.__obj_fields:
+                self.interpreter.error(ErrorType.NAME_ERROR, line_num=x.line_num)
+                return
             return self.__obj_fields[x].curr_val
         elif isinstance(x, str):
             if x[0] == '"' and x[-1] == '"':
@@ -415,6 +426,9 @@ class ObjectDefinition:
             if x in self.__current_method.params:
                 value = self.__current_method.params[x]
             else:
+                if x not in self.__obj_fields:
+                    self.interpreter.error(ErrorType.NAME_ERROR)
+                    return '_'
                 value = self.__obj_fields[x].curr_val
             if isinstance(value, str):
                 return value
@@ -524,11 +538,17 @@ class ObjectDefinition:
         if is_StringWithLineNumber(call_str) and is_StringWithLineNumber(expr[2]) and call_str.line_num is not None:
             if expr[1] == InterpreterBase.ME_DEF:
                 obj_instance = self
+            elif is_statement(expr[1]):
+                obj_instance = self.__run_statement(expr[1])
             else:
+                if expr[1] not in self.__obj_fields:
+                    self.interpreter.error(ErrorType.NAME_ERROR, line_num=call_str.line_num)
+                    return ReturnValue(self.interpreter.nothing)
                 obj_instance = self.__obj_fields[expr[1]].curr_val
             if obj_instance is None:
                 self.interpreter.error(ErrorType.FAULT_ERROR, line_num=call_str.line_num)
-                return
+                return ReturnValue(self.interpreter.nothing)
+            assert isinstance(obj_instance, ObjectDefinition)
             return obj_instance.call_method(expr[2], call_str.line_num, tuple(map(self.__parse_value, expr[3:])))
 
     def __execute_new_expression(self, expr: NewExpressionType):
@@ -600,16 +620,15 @@ class Interpreter(InterpreterBase):
                 class_name = expr[1]
                 assert is_StringWithLineNumber(class_name)
                 fields_or_methods = expr[2:]  # doesn't get correct type so use typeguard
-                if not is_class_members_type(fields_or_methods):
-                    return
+                assert is_class_members_type(fields_or_methods)
                 # print(id(fields_or_methods[0]), id(expr[2]))  # same ids
                 if class_name in self.classes:
                     super().error(ErrorType.TYPE_ERROR, line_num=class_name.line_num)
                     return
                 self.classes[class_name] = ClassDefinition(fields_or_methods, self)
 
-        print(f'tuple    parsed_program: {parsed_program} in __discover_all_classes_and_track_them')
-        print(f'self.classes: {self.classes.keys()} in __discover_all_classes_and_track_them')
+        print(f'in __discover_all_classes_and_track_them, parsed_program: {parsed_program}')
+        print(f'in __discover_all_classes_and_track_them, self.classes: {self.classes.keys()}')
         return
 
     def __find_definition_for_class(self, class_name: str) -> ClassDefinition:
