@@ -471,7 +471,8 @@ class ObjectDefinition:
     def __execute_add_expression(self, expr: AddExpressionType) -> int | str:
         a = self.__parse_value(expr[1])
         b = self.__parse_value(expr[2])
-        if isinstance(a, int) and isinstance(b, int):
+        if type(a) == int and type(a) == type(b):
+            assert isinstance(a, int) and isinstance(b, int)
             return a + b
         if isinstance(a, str) and isinstance(b, str):
             return f'"{a}{b}"'  # return with quotes to mark this as literal instead of a var
@@ -481,9 +482,10 @@ class ObjectDefinition:
     def __execute_arithmetic_expression(self, expr: ArithmeticExpressionType) -> int:
         a = self.__parse_value(expr[1])
         b = self.__parse_value(expr[2])
-        if not isinstance(a, int) or not isinstance(b, int):
+        if type(a) != int or type(b) != int:
             self.interpreter.error(ErrorType.TYPE_ERROR, line_num=expr[0].line_num)
             return 0
+        assert isinstance(a, int) and isinstance(b, int)
         arithmetic_functions = {'-': lambda x, y: x - y, '*': lambda x, y: x * y,
                                 '/': lambda x, y: x // y, '%': lambda x, y: x % y
                                 }
@@ -696,12 +698,11 @@ def main():
 
     # this is how you use our BParser class to parse a valid
     # Brewin program into python list format.
-    result, parsed_program = BParser.parse(program_source)
-    if result == True:
-        print(f'original parsed_program: {parsed_program}')
-    else:
-        print('Parsing failed. There must have been a mismatched parenthesis.')
-
+    # result, parsed_program = BParser.parse(program_source)
+    # if result == True:
+    #     print(f'original parsed_program: {parsed_program}')
+    # else:
+    #     print('Parsing failed. There must have been a mismatched parenthesis.')
     # t = deeptuple(parsed_program[0])
     # print(parsed_program[0], t)
     # # parsed_program[0][2] = 'asdfad'
