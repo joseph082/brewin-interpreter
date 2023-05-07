@@ -300,9 +300,9 @@ class ObjectDefinition:
         input = self.interpreter.get_input()
         assert isinstance(input, str), "input isn't a str"
         if var_name in self.__current_method.params:
-            self.__current_method.params[var_name] = input
+            self.__current_method.params[var_name] = int(input)
         else:
-            self.__obj_fields[var_name].curr_val = input
+            self.__obj_fields[var_name].curr_val = int(input)
         return
 
     def __execute_all_sub_statements_of_begin_statement(self, statement: BeginStatementType) -> None:
