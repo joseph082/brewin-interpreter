@@ -1,8 +1,8 @@
 # from __future__ import annotations  # https://stackoverflow.com/questions/33533148/how-do-i-type-hint-a-method-with-the-type-of-the-enclosing-class
 from intbase import InterpreterBase, ErrorType
 from bparser import BParser, StringWithLineNumber
-
 from typing import TypeGuard, Union, List, Tuple, Any, NoReturn, Self
+from copy import deepcopy
 
 
 # https://devblogs.microsoft.com/python/pylance-introduces-five-new-features-that-enable-type-magic-for-python-developers/
@@ -163,11 +163,12 @@ class ReturnValue:
 
 
 class Method:
-    def __init__(self, name: StringWithLineNumber, method_params, expr) -> None:
+    def __init__(self, name: StringWithLineNumber, method_params: Tuple[StringWithLineNumber], expr: StatementType, nothing: Nothing) -> None:
         self.name = name
         self.params = {}  # name mapped to value
+        self.nothing = nothing
         for p in method_params:
-            self.params[p] = None
+            self.params[p] = nothing
         self.expr = expr
 
         return
@@ -177,6 +178,20 @@ class Method:
 
     def get_name(self) -> StringWithLineNumber:
         return self.name
+
+    # https://stackoverflow.com/questions/1500718/how-to-override-the-copy-deepcopy-operations-for-a-python-object
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            # print(k, v)
+            new_v = deepcopy(v, memo)
+            if isinstance(new_v, dict) and k == 'params':
+                new_v = {k: self.nothing for k in new_v}
+            setattr(result, k, new_v)
+
+        return result
 
 
 class Field:
@@ -225,7 +240,7 @@ class ObjectDefinition:
     def call_method(self, method_name: str | StringWithLineNumber, line_num: int, parameters=()):
         method = self.__find_method(method_name, line_num)
         if method is None:
-            return
+        method = deepcopy(method)
         self.__current_method = method
         if len(parameters) != len(method.params):
             self.interpreter.error(ErrorType.TYPE_ERROR)
@@ -540,10 +555,10 @@ class ClassDefinition:
             if is_method_statement(expr):
                 if name in self.my_methods:
                     self.interpreter.error(ErrorType.NAME_ERROR, line_num=name.line_num)  # they use expr[0].line_num
-                self.my_methods[name] = Method(name, expr[2], expr[3])
+                self.my_methods[name] = Method(name, expr[2], expr[3], self.interpreter.nothing)
             elif is_field_statement(expr):
                 if name in self.my_fields:
-                    self.interpreter.error(ErrorType.NAME_ERROR, line_num=name.line_num)  # todo
+                    self.interpreter.error(ErrorType.NAME_ERROR, line_num=name.line_num)
                 try:
                     field_val = int(expr[2])
                 except:
@@ -565,7 +580,7 @@ class ClassDefinition:
     def instantiate_object(self) -> ObjectDefinition:
         obj = ObjectDefinition(self.interpreter)
         for name, method in self.my_methods.items():
-            obj.add_method(name, method)
+            obj.add_method(name, deepcopy(method))  # CAREFUL HERE
         for name, field in self.my_fields.items():
             obj.add_field(name, field.get_initial_value())
         return obj
@@ -643,6 +658,17 @@ def print_line_nums(parsed_program) -> None:
 def main():
     # all programs will be provided to your interpreter as a list of
     # python strings, just as shown here.
+
+    # m = Method(StringWithLineNumber('d', 0), {'k': 11}, ('', ''), Nothing())
+    # n = deepcopy(m)
+    # print(id(m.params), id(n.params))
+    # m.params['k'] = 3
+    # print(m.__dict__.items(), n.__dict__.items()
+    #       )
+    # print(id(m.params), id(n.params))
+    # print(id(m.expr), id(n.expr))
+    # print(id(m.name), id(n.name))
+    
     program_source = ['(class main',
                       ' (method main ()',
                       ' (print "hello world!")',
