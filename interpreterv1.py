@@ -78,7 +78,7 @@ def is_begin_statement(s: StatementType) -> TypeGuard[BeginStatementType]:
     return s[0] == InterpreterBase.BEGIN_DEF
 
 
-def is_return_statement(s: StatementType) -> TypeGuard[ReturnExpressionType]:
+def is_return_expression(s: StatementType) -> TypeGuard[ReturnExpressionType]:
     return s[0] == InterpreterBase.RETURN_DEF
 
 
@@ -152,6 +152,12 @@ def is_bool_unary_expression(e) -> TypeGuard[BoolUnaryExpressionType]:
 
 class Nothing:
     def __init__(self) -> None:
+        return
+
+
+class ReturnValue:
+    def __init__(self, val) -> None:
+        self.val = val
         return
 
 
@@ -248,13 +254,13 @@ class ObjectDefinition:
         elif is_new_expression(statement):
             result = self.__execute_new_expression(statement)
         elif is_while_statement(statement):
-            self.__execute_while_statement(statement)
+            result = self.__execute_while_statement(statement)
         elif is_if_statement(statement):
-            self.__execute_if_statement(statement)
-        elif is_return_statement(statement):
+            result = self.__execute_if_statement(statement)
+        elif is_return_expression(statement):
             result = self.__execute_return_expression(statement)
         elif is_begin_statement(statement):
-            self.__execute_all_sub_statements_of_begin_statement(statement)
+            result = self.__execute_begin_statement(statement)
         elif is_set_statement(statement):
             self.__execute_set_statement(statement)
         elif is_add_expression(statement):
@@ -305,10 +311,12 @@ class ObjectDefinition:
             self.__obj_fields[var_name].curr_val = int(input)
         return
 
-    def __execute_all_sub_statements_of_begin_statement(self, statement: BeginStatementType) -> None:
+    def __execute_begin_statement(self, statement: BeginStatementType) -> Nothing | ReturnValue:
         for sub_statement in statement[1:]:
-            self.__run_statement(sub_statement)
-        return
+            res = self.__run_statement(sub_statement)
+            if isinstance(res, ReturnValue):
+                return res
+        return self.interpreter.nothing
 
     def __execute_set_statement(self, statement: SetStatementType) -> None:
         var_name = statement[1]
@@ -324,11 +332,11 @@ class ObjectDefinition:
             self.interpreter.error(ErrorType.NAME_ERROR, line_num=statement[0].line_num)
         return
 
-    def __parse_value(self, x: StatementType | StringWithLineNumber | str | int | Self | Nothing) -> int | StringWithLineNumber | bool | str | Self | Nothing | NoReturn:
+    def __parse_value(self, x: StatementType | StringWithLineNumber | str | int | Self | Nothing | ReturnValue) -> (int | StringWithLineNumber | bool | str | Self | None | Nothing | ReturnValue | NoReturn):
         # https://stackoverflow.com/a/70932112 for Self
         if is_statement(x):
             res = self.__run_statement(x)
-            assert res is not None, '__parse_val called with None'
+            assert res is not None, '__parse_val called with statement that returns None'
             return self.__parse_value(res)
         elif is_StringWithLineNumber(x):
             try:
@@ -343,6 +351,8 @@ class ObjectDefinition:
                 return True
             if x == InterpreterBase.FALSE_DEF:
                 return False
+            if x == InterpreterBase.NULL_DEF:
+                return None
             assert x[0] != '"' and x[-1] != '"', f'unknown StringWithLineNumber as parse_value argument: {x}'
             # variable
             if x in self.__current_method.params:
@@ -354,6 +364,8 @@ class ObjectDefinition:
             return x
         elif isinstance(x, (int, ObjectDefinition, Nothing)):
             return x
+        elif isinstance(x, ReturnValue):
+            return x.val
         else:
             raise Exception('not a tuple, string, or int in parse_value')
 
@@ -390,27 +402,37 @@ class ObjectDefinition:
                 return value
 
             return self.__stringify(value)
-
+        elif isinstance(x, ReturnValue):
+            return self.__stringify(x.val)
         else:
             raise Exception(x, type(x), 'called stringify with invalid type.')
 
-    def __execute_if_statement(self, statement: IfStatementType) -> None:
+    def __execute_if_statement(self, statement: IfStatementType) -> Nothing | ReturnValue:
         expr_res = self.__parse_value(statement[1])
         if expr_res is True:
-            self.__run_statement(statement[2])
+            res = self.__run_statement(statement[2])
         elif expr_res is False:
-            self.__run_statement(statement[3])
+            res = self.__run_statement(statement[3])
         else:
             self.interpreter.error(ErrorType.TYPE_ERROR, line_num=statement[0].line_num)
-        return
+            res = "_"
+        if isinstance(res, ReturnValue):
+            # print(f'returning returnval in if statement: {res.val}')
+            return res
+        return self.interpreter.nothing
 
-    def __execute_while_statement(self, statement: WhileStatementType) -> None:
-        while (expr_res := self.__parse_value(statement[1])) is True:
-            self.__run_statement(statement[2])
-        if expr_res is False:
-            return
+    def __execute_while_statement(self, statement: WhileStatementType) -> Nothing | ReturnValue:
+        res = "_"
+        while (bool_expr_res := self.__parse_value(statement[1])) is True:
+            res = self.__run_statement(statement[2])
+            if isinstance(res, ReturnValue):
+                return res
+        if bool_expr_res is False:
+            if isinstance(res, ReturnValue):
+                return res
+            return self.interpreter.nothing
         self.interpreter.error(ErrorType.TYPE_ERROR, line_num=statement[0].line_num)
-        return
+        return self.interpreter.nothing
 
     def __execute_add_expression(self, expr: AddExpressionType) -> int | str:
         a = self.__parse_value(expr[1])
@@ -489,10 +511,10 @@ class ObjectDefinition:
             return
         return self.interpreter.classes[expr[1]].instantiate_object()
 
-    def __execute_return_expression(self, expr: ReturnExpressionType):
+    def __execute_return_expression(self, expr: ReturnExpressionType) -> ReturnValue:
         if len(expr) == 1:
-            return self.interpreter.nothing
-        return self.__run_statement(expr[1])
+            return ReturnValue(self.interpreter.nothing)
+        return ReturnValue(self.__parse_value(expr[1]))
 
 
 class ClassDefinition:
