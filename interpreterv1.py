@@ -510,8 +510,8 @@ class ObjectDefinition:
             if expr[0] == '==':
                 return a == b
             return a != b
-        if ((isinstance(a, ObjectDefinition) and b is None) or
-                (isinstance(b, ObjectDefinition) and a is None) or (a is None and b is None)):  #
+        if ((isinstance(a, ObjectDefinition) or a is None) and
+                (isinstance(b, ObjectDefinition) or b is None)):
             if expr[0] == '==':
                 return a is b
             return a is not b
