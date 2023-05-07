@@ -122,6 +122,7 @@ AddExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  #
 IntStringComparisonExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # <, >, <=, >=
 EqualityComparisonExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # ==, !=
 ArithmeticExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # -, *, /, %
+BoolComparisonExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # &, |
 
 
 def is_add_expression(e) -> TypeGuard[AddExpressionType]:
@@ -138,6 +139,10 @@ def is_equality_comparison_expression(e) -> TypeGuard[EqualityComparisonExpressi
 
 def is_arithmetic_expression(e) -> TypeGuard[ArithmeticExpressionType]:
     return e[0] == '-' or e[0] == '*' or e[0] == '/' or e[0] == '%'
+
+
+def is_bool_comparison_expression(e) -> TypeGuard[BoolComparisonExpressionType]:
+    return e[0] == '&' or e[0] == '|'
 
 
 class Nothing:
@@ -255,7 +260,8 @@ class ObjectDefinition:
             result = self.__execute_int_string_comparison_expression(statement)
         elif is_equality_comparison_expression(statement):
             result = self.__execute_equality_comparison_expression(statement)
-
+        elif is_bool_comparison_expression(statement):
+            result = self.__execute_bool_comparison_expression(statement)
         return result
 
     def __execute_print_statement(self, args: PrintStatementType) -> None:
@@ -440,6 +446,16 @@ class ObjectDefinition:
             return a != b
         self.interpreter.error(ErrorType.TYPE_ERROR, line_num=expr[0].line_num)
         return False
+
+    def __execute_bool_comparison_expression(self, expr: BoolComparisonExpressionType) -> bool:
+        a = self.__parse_value(expr[1])
+        b = self.__parse_value(expr[2])
+        if not isinstance(a, bool) or not isinstance(b, bool):
+            self.interpreter.error(ErrorType.TYPE_ERROR, line_num=expr[0].line_num)
+            return False
+        if expr[0] == '&':
+            return a and b
+        return a or b
 
     def __execute_call_expression(self, expr: CallExpressionType):
         call_str = expr[0]

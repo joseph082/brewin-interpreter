@@ -1,0 +1,20 @@
+(class main
+(method foo (q)
+(begin
+(print (& true false))
+(print (& false true))
+(print (& true true))
+
+(print (| true false))
+(print (| false true))
+(print (| true true))
+
+(return (+ 10 q)))
+
+) # returns the value of 3*q
+(method main ()
+(begin (print (call me foo 5))
+ (print 10)
+)
+)
+)
