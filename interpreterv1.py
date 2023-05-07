@@ -250,6 +250,8 @@ class ObjectDefinition:
         elif is_call_expression(statement):
             current_method = self.__current_method
             result = self.__execute_call_expression(statement)
+            if isinstance(result, ReturnValue):
+                result = result.val
             self.__current_method = current_method
         elif is_new_expression(statement):
             result = self.__execute_new_expression(statement)
