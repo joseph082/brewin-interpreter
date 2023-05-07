@@ -22,7 +22,8 @@ SetStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, StringWithL
 
 StatementType = Tuple[Any, *Tuple[Any, ...]]
 
-IfStatementType = Tuple[StringWithLineNumber, StatementType, StatementType, StatementType]  # second should be expression
+IfStatementType = Union[Tuple[StringWithLineNumber, StatementType, StatementType, StatementType],
+                        Tuple[StringWithLineNumber, StatementType, StatementType]]  # second should be expression
 BeginStatementType = Tuple[StringWithLineNumber, Tuple[StatementType, *Tuple[StatementType]]]
 WhileStatementType = Tuple[StringWithLineNumber, StatementType, StatementType]  # second should be expression
 
@@ -414,6 +415,8 @@ class ObjectDefinition:
         if expr_res is True:
             res = self.__run_statement(statement[2])
         elif expr_res is False:
+            if len(statement) == 3:
+                return self.interpreter.nothing
             res = self.__run_statement(statement[3])
         else:
             self.interpreter.error(ErrorType.TYPE_ERROR, line_num=statement[0].line_num)
