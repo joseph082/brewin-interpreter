@@ -4,6 +4,7 @@
  (method main ()
   (begin
    (inputi x)
+   (set x (+ x 0))
    (print x)
    (inputi y)
    (print y)

@@ -1,0 +1,30 @@
+(class main
+  (field n 0)
+  (field result 1)
+  (method main ()
+    (begin
+      (print "Enter a number: ")
+      (inputi n)
+      (print n " factorial is " (call me factorial n))))
+
+  (method factorial (n)
+    (begin
+     (if (<= n 3) (return (call me factorial2 n)))
+     (return
+        (* (call me factorial (- n 1))
+          n
+        )
+     )
+    )
+  )
+  (method factorial2 (n)
+    (begin
+     (if (<= n 1) (return 1))
+     (return
+        (* (call me factorial2 (- n 1))
+          n
+        )
+     )
+    )
+  )
+)
