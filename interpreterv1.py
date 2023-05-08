@@ -18,7 +18,7 @@ SetStatementType = tuple[StringWithLineNumber, StringWithLineNumber, StatementTy
 
 IfStatementType = Union[tuple[StringWithLineNumber, StatementType, StatementType, StatementType],
                         tuple[StringWithLineNumber, StatementType, StatementType]]
-BeginStatementType = tuple[StringWithLineNumber, tuple[StatementType, *tuple[StatementType]]]
+BeginStatementType = tuple[StringWithLineNumber, tuple[StatementType, *tuple[StatementType, ...]]]
 WhileStatementType = tuple[StringWithLineNumber, StatementType, StatementType]
 
 MethodStatementType = tuple[StringWithLineNumber, StringWithLineNumber, tuple[StringWithLineNumber], StatementType]
