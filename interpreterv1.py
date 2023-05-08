@@ -6,12 +6,6 @@ from copy import deepcopy
 
 
 # https://devblogs.microsoft.com/python/pylance-introduces-five-new-features-that-enable-type-magic-for-python-developers/
-# ProgramElementType = Union[StringWithLineNumber, list['ProgramElementType']]
-# ParsedProgramType = list[ProgramElementType]
-# ProgramElementType = Union[StringWithLineNumber, tuple['ProgramElementType']]
-# ParsedProgramType = tuple[ProgramElementType]
-# FlattenedExprType = list[StringWithLineNumber]
-
 StatementType = tuple[StringWithLineNumber, *tuple[StringWithLineNumber, ...]]
 
 PrintArgsType = tuple[Union[int, bool, str, StringWithLineNumber, StatementType], ...]
@@ -21,7 +15,6 @@ InputStringStatementType = tuple[StringWithLineNumber, StringWithLineNumber]
 InputIntStatementType = tuple[StringWithLineNumber, StringWithLineNumber]
 
 SetStatementType = tuple[StringWithLineNumber, StringWithLineNumber, StatementType]
-
 
 IfStatementType = Union[tuple[StringWithLineNumber, StatementType, StatementType, StatementType],
                         tuple[StringWithLineNumber, StatementType, StatementType]]
@@ -179,10 +172,8 @@ class Method:
     def get_top_level_statement(self):
         return self.expr
 
-    def get_name(self) -> StringWithLineNumber:
-        return self.name
-
     # https://stackoverflow.com/questions/1500718/how-to-override-the-copy-deepcopy-operations-for-a-python-object
+
     def __deepcopy__(self, memo):
         cls = self.__class__
         result = cls.__new__(cls)
@@ -204,12 +195,6 @@ class Field:
         self.curr_val = val
         self.init_val = val
         return
-
-    def get_name(self) -> StringWithLineNumber:
-        return self.name
-
-    def get_initial_value(self) -> FieldValueType:
-        return self.init_val
 
     # def __copy__(self) -> Field:
     #     return Field(self.name, self.init_val)
@@ -303,8 +288,8 @@ class ObjectDefinition:
             if is_statement(a):
                 # execute statement
                 res = self.__run_statement(a)
-                if res is not None:
-                    output_str += self.__stringify(res)
+                assert res is not None and not isinstance(res, Nothing)
+                output_str += self.__stringify(res)
             elif is_StringWithLineNumber(a):
                 output_str += self.__stringify(a)
         self.interpreter.output(output_str)
@@ -399,7 +384,7 @@ class ObjectDefinition:
         else:
             raise Exception('not a tuple, string, or int in parse_value')
 
-    def __stringify(self, x) -> str | NoReturn:
+    def __stringify(self, x: Union[bool, int, str, ReturnValue, 'ObjectDefinition']) -> str | NoReturn:
         if x is True:
             return InterpreterBase.TRUE_DEF
         if x is False:
@@ -432,7 +417,7 @@ class ObjectDefinition:
                 value = self.__obj_fields[x].curr_val
             if isinstance(value, str):
                 return value
-
+            assert value is not None and not isinstance(value, Nothing)
             return self.__stringify(value)
         elif isinstance(x, ReturnValue):
             return self.__stringify(x.val)
@@ -601,7 +586,7 @@ class Interpreter(InterpreterBase):
     def __init__(self, console_output=True, inp=None, trace_output=False) -> None:
         super().__init__(console_output, inp)  # call InterpreterBase’s constructor
 
-        self.classes = {}  # self.classes = dict[StringWithLineNumber, Any]. doesn't work with in
+        self.classes = {}  # self.classes = dict[StringWithLineNumber, Any]. doesn't work with `in`
         self.nothing = Nothing()
         return
 
@@ -612,13 +597,12 @@ class Interpreter(InterpreterBase):
                 assert is_StringWithLineNumber(class_name)
                 fields_or_methods = expr[2:]  # doesn't get correct type so use typeguard
                 assert is_class_members_type(fields_or_methods)
-                # print(id(fields_or_methods[0]), id(expr[2]))  # same ids
                 if class_name in self.classes:
                     super().error(ErrorType.TYPE_ERROR, line_num=class_name.line_num)
                 self.classes[class_name] = ClassDefinition(fields_or_methods, self)
 
         print(f'in __discover_all_classes_and_track_them, parsed_program: {parsed_program}')
-        print(f'in __discover_all_classes_and_track_them, self.classes: {self.classes.keys()}')
+        # print(f'in __discover_all_classes_and_track_them, self.classes: {self.classes.keys()}')
         return
 
     def __find_definition_for_class(self, class_name: str) -> ClassDefinition:
@@ -691,7 +675,8 @@ def main():
     # Brewin program into python list format.
     result, parsed_program = BParser.parse(program_source)
     if result == True:
-        print(f'original parsed_program: {parsed_program}')
+        pass
+        # print(f'original parsed_program: {parsed_program}')
     else:
         print('Parsing failed. There must have been a mismatched parenthesis.')
     # t = deeptuple(parsed_program[0])
