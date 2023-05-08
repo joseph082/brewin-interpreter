@@ -1,7 +1,7 @@
 # from __future__ import annotations  # https://stackoverflow.com/questions/33533148/how-do-i-type-hint-a-method-with-the-type-of-the-enclosing-class
 from intbase import InterpreterBase, ErrorType
 from bparser import BParser, StringWithLineNumber
-from typing import TypeGuard, Union, List, Tuple, Any, NoReturn, Self
+from typing import TypeGuard, Union, List, Tuple, NoReturn, Self
 from copy import deepcopy
 
 
@@ -20,7 +20,7 @@ InputIntStatementType = Tuple[StringWithLineNumber, StringWithLineNumber]
 SetStatementType = Tuple[StringWithLineNumber, StringWithLineNumber, StringWithLineNumber]
 
 
-StatementType = Tuple[Any, *Tuple[Any, ...]]
+StatementType = Tuple[StringWithLineNumber, *Tuple[StringWithLineNumber, ...]]
 
 IfStatementType = Union[Tuple[StringWithLineNumber, StatementType, StatementType, StatementType],
                         Tuple[StringWithLineNumber, StatementType, StatementType]]  # second should be expression
@@ -116,7 +116,7 @@ def is_class_statement(c) -> TypeGuard[ClassStatementType]:
 
 
 def is_statement(s) -> TypeGuard[StatementType]:
-    return isinstance(s, tuple)
+    return isinstance(s, tuple)  # and all(map(lambda x: is_StringWithLineNumber(x) or is_statement(x), list(x for x in s)))
 
 
 AddExpressionType = Tuple[StringWithLineNumber, StatementType, StatementType]  # +
