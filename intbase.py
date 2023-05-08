@@ -8,6 +8,7 @@ or make any changes to your local copy!
 
 from enum import Enum
 from bparser import BParser
+from typing import NoReturn
 
 
 class ErrorType(Enum):
@@ -95,7 +96,7 @@ class InterpreterBase:
 
         return None
 
-    def error(self, error_type, description=None, line_num=None):
+    def error(self, error_type, description=None, line_num=None) -> NoReturn:
         """
         A method to log any errors. Your derived class must call this
         function for any errors that you run into!
