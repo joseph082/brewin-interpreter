@@ -3,7 +3,7 @@
   (field result 1)
   (method main ()
     (begin
-      (print "Enter a number: ")
+      (print "Enter a number:")
       (inputi n)
       (print n " factorial is " (call me factorial n))))
 
