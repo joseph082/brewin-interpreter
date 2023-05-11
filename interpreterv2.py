@@ -1,7 +1,11 @@
-
-from bparser import BParser
+from bparser import BParser, StringWithLineNumber
 from intbase import InterpreterBase, ErrorType
 from enum import Enum
+from typing import Self, TypeGuard
+
+
+def is_StringWithLineNumber(s) -> TypeGuard[StringWithLineNumber]:
+    return isinstance(s, StringWithLineNumber)
 
 
 class EnvironmentManager:
@@ -14,18 +18,16 @@ class EnvironmentManager:
     """
 
     def __init__(self):
-        self.environment = {}
+        self.environment: dict[StringWithLineNumber, Value] = {}
 
-    def get(self, symbol):
+    def get(self, symbol: StringWithLineNumber):
         """
         Get data associated with variable name.
         """
-        if symbol in self.environment:
-            return self.environment[symbol]
+        return self.environment.get(symbol, None)
+        # return self.environment.get(symbol, Value(Type.NOTHING))
 
-        return None
-
-    def set(self, symbol, value):
+    def set(self, symbol: StringWithLineNumber, value: 'Value'):
         """
         Set data associated with a variable name.
         """
@@ -56,7 +58,7 @@ class Value:
     def value(self):
         return self.__value
 
-    def set(self, other):
+    def set(self, other: Self):
         self.__type = other.type()
         self.__value = other.value()
 
@@ -86,8 +88,8 @@ class MethodDef:
     """
 
     def __init__(self, method_def):
-        self.method_name = method_def[1]
-        self.formal_params = method_def[2]
+        self.method_name: StringWithLineNumber = method_def[1]
+        self.formal_params: StringWithLineNumber = method_def[2]
         self.code = method_def[3]
 
 
@@ -110,7 +112,7 @@ class ClassDef:
     class definition: [class classname [field1 field2 ... method1 method2 ...]]
     """
 
-    def __init__(self, class_def, interpreter):
+    def __init__(self, class_def, interpreter: 'Interpreter'):
         self.interpreter = interpreter
         self.name = class_def[1]
         self.__create_field_list(class_def[2:])
@@ -122,11 +124,11 @@ class ClassDef:
         """
         return self.fields
 
-    def get_methods(self):
+    def get_methods(self) -> list[MethodDef]:
         """
         Get a list of MethodDefs for *all* fields in the class.
         """
-        return self.methods
+        return self.class_methods
 
     def __create_field_list(self, class_body):
         self.fields = []
@@ -143,7 +145,7 @@ class ClassDef:
                 fields_defined_so_far.add(member[1])
 
     def __create_method_list(self, class_body):
-        self.methods = []
+        self.class_methods: list[MethodDef] = []
         methods_defined_so_far = set()
         for member in class_body:
             if member[0] == InterpreterBase.METHOD_DEF:
@@ -153,7 +155,7 @@ class ClassDef:
                         "duplicate method " + member[1],
                         member[0].line_num,
                     )
-                self.methods.append(MethodDef(member))
+                self.class_methods.append(MethodDef(member))
                 methods_defined_so_far.add(member[1])
 
 
@@ -163,7 +165,7 @@ class ObjectDef:
     STATUS_NAME_ERROR = 2
     STATUS_TYPE_ERROR = 3
 
-    def __init__(self, interpreter, class_def, trace_output):
+    def __init__(self, interpreter: 'Interpreter', class_def, trace_output):
         self.interpreter = interpreter  # objref to interpreter object. used to report errors, get input, produce output
         self.class_def = class_def  # take class body from 3rd+ list elements, e.g., ["class",classname", [classbody]]
         self.trace_output = trace_output
@@ -171,20 +173,20 @@ class ObjectDef:
         self.__map_method_names_to_method_definitions()
         self.__create_map_of_operations_to_lambdas()  # sets up maps to facilitate binary and unary operations, e.g., (+ 5 6)
 
-    def call_method(self, method_name, actual_params, line_num_of_caller):
+    def call_method(self, method_name: StringWithLineNumber, actual_params: tuple[Value, ...], line_num_of_caller):
         """
         actual_params is a list of Value objects (all parameters are passed by value).
 
         The caller passes in the line number so we can properly generate an error message.
         The error is then generated at the source (i.e., where the call is initiated).
         """
-        if method_name not in self.methods:
+        if method_name not in self.obj_methods:
             self.interpreter.error(
                 ErrorType.NAME_ERROR,
                 "unknown method " + method_name,
                 line_num_of_caller,
             )
-        method_info = self.methods[method_name]
+        method_info = self.obj_methods[method_name]
         if len(actual_params) != len(method_info.formal_params):
             self.interpreter.error(
                 ErrorType.TYPE_ERROR,
@@ -195,6 +197,7 @@ class ObjectDef:
             EnvironmentManager()
         )  # maintains lexical environment for function; just params for now
         for formal, actual in zip(method_info.formal_params, actual_params):
+            assert is_StringWithLineNumber(formal)
             env.set(formal, actual)
         # since each method has a single top-level statement, execute it.
         status, return_value = self.__execute_statement(env, method_info.code)
@@ -205,7 +208,7 @@ class ObjectDef:
         # The method didn't explicitly return a value, so return a value of type nothing
         return Value(InterpreterBase.NOTHING_DEF)
 
-    def __execute_statement(self, env, code):
+    def __execute_statement(self, env: EnvironmentManager, code):
         """
         returns (status_code, return_value) where:
         - status_code indicates if the next statement includes a return
@@ -240,7 +243,7 @@ class ObjectDef:
         )
 
     # (begin (statement1) (statement2) ... (statementn))
-    def __execute_begin(self, env, code):
+    def __execute_begin(self, env: EnvironmentManager, code):
         for statement in code[1:]:
             status, return_value = self.__execute_statement(env, statement)
             if status == ObjectDef.STATUS_RETURN:
@@ -255,19 +258,19 @@ class ObjectDef:
     # (call object_ref/me methodname param1 param2 param3)
     # where params are expressions, and expresion could be a value, or a (+ ...)
     # statement version of a method call; there's also an expression version of a method call below
-    def __execute_call(self, env, code):
+    def __execute_call(self, env: EnvironmentManager, code):
         return ObjectDef.STATUS_PROCEED, self.__execute_call_aux(
             env, code, code[0].line_num
         )
 
     # (set varname expression), where expresion could be a value, or a (+ ...)
-    def __execute_set(self, env, code):
+    def __execute_set(self, env: EnvironmentManager, code):
         val = self.__evaluate_expression(env, code[2], code[0].line_num)
         self.__set_variable_aux(env, code[1], val, code[0].line_num)
         return ObjectDef.STATUS_PROCEED, None
 
     # (return expression) where expresion could be a value, or a (+ ...)
-    def __execute_return(self, env, code):
+    def __execute_return(self, env: EnvironmentManager, code):
         if len(code) == 1:
             # [return] with no return expression
             return ObjectDef.STATUS_RETURN, create_value(InterpreterBase.NOTHING_DEF)
@@ -276,7 +279,7 @@ class ObjectDef:
         )
 
     # (print expression1 expression2 ...) where expresion could be a variable, value, or a (+ ...)
-    def __execute_print(self, env, code):
+    def __execute_print(self, env: EnvironmentManager, code):
         output = ""
         for expr in code[1:]:
             # TESTING NOTE: Will not test printing of object references
@@ -291,8 +294,9 @@ class ObjectDef:
         return ObjectDef.STATUS_PROCEED, None
 
     # (inputs target_variable) or (inputi target_variable) sets target_variable to input string/int
-    def __execute_input(self, env, code, get_string):
+    def __execute_input(self, env: EnvironmentManager, code, get_string):
         inp = self.interpreter.get_input()
+        assert isinstance(inp, str)
         if get_string:
             val = Value(Type.STRING, inp)
         else:
@@ -303,7 +307,7 @@ class ObjectDef:
 
     # helper method used to set either parameter variables or member fields; parameters currently shadow
     # member fields
-    def __set_variable_aux(self, env, var_name, value, line_num):
+    def __set_variable_aux(self, env: EnvironmentManager, var_name: StringWithLineNumber, value: Value, line_num):
         # parameter shadows fields
         if value.type() == Type.NOTHING:
             self.interpreter.error(
@@ -322,7 +326,7 @@ class ObjectDef:
 
     # (if expression (statement) (statement) ) where expresion could be a boolean constant (e.g., true), member
     # variable without ()s, or a boolean expression in parens, like (> 5 a)
-    def __execute_if(self, env, code):
+    def __execute_if(self, env: EnvironmentManager, code):
         condition = self.__evaluate_expression(env, code[1], code[0].line_num)
         if condition.type() != Type.BOOL:
             self.interpreter.error(
@@ -344,7 +348,7 @@ class ObjectDef:
 
     # (while expression (statement) ) where expresion could be a boolean value, boolean member variable,
     # or a boolean expression in parens, like (> 5 a)
-    def __execute_while(self, env, code):
+    def __execute_while(self, env: EnvironmentManager, code):
         while True:
             condition = self.__evaluate_expression(env, code[1], code[0].line_num)
             if condition.type() != Type.BOOL:
@@ -366,8 +370,9 @@ class ObjectDef:
     # given an expression, return a Value object with the expression's evaluated result
     # expressions could be: constants (true, 5, "blah"), variables (e.g., x), arithmetic/string/logical expressions
     # like (+ 5 6), (+ "abc" "def"), (> a 5), method calls (e.g., (call me foo)), or instantiations (e.g., new dog_class)
-    def __evaluate_expression(self, env, expr, line_num_of_statement):
-        if not isinstance(expr, list):
+    def __evaluate_expression(self, env: EnvironmentManager, expr, line_num_of_statement) -> Value:
+        if not isinstance(expr, tuple):
+            assert is_StringWithLineNumber(expr)
             # locals shadow member variables
             val = env.get(expr)
             if val is not None:
@@ -443,6 +448,7 @@ class ObjectDef:
         # handle new expression: (new classname)
         if operator == InterpreterBase.NEW_DEF:
             return self.__execute_new_aux(env, expr, line_num_of_statement)
+        raise Exception("shouldn't be reached")
 
     # (new classname)
     def __execute_new_aux(self, _, code, line_num_of_statement):
@@ -451,7 +457,7 @@ class ObjectDef:
 
     # this method is a helper used by call statements and call expressions
     # (call object_ref/me methodname p1 p2 p3)
-    def __execute_call_aux(self, env, code, line_num_of_statement):
+    def __execute_call_aux(self, env: EnvironmentManager, code, line_num_of_statement):
         # determine which object we want to call the method on
         obj_name = code[1]
         if obj_name == InterpreterBase.ME_DEF:
@@ -465,17 +471,13 @@ class ObjectDef:
             self.interpreter.error(
                 ErrorType.FAULT_ERROR, "null dereference", line_num_of_statement
             )
-        actual_args = []
-        for expr in code[3:]:
-            actual_args.append(
-                self.__evaluate_expression(env, expr, line_num_of_statement)
-            )
+        actual_args = tuple(map(lambda expr: self.__evaluate_expression(env, expr, line_num_of_statement), code[3:]))
         return obj.call_method(code[2], actual_args, line_num_of_statement)
 
     def __map_method_names_to_method_definitions(self):
-        self.methods = {}
+        self.obj_methods: dict[StringWithLineNumber, MethodDef] = {}
         for method in self.class_def.get_methods():
-            self.methods[method.method_name] = method
+            self.obj_methods[method.method_name] = method
 
     def __map_fields_to_values(self):
         self.fields = {}
@@ -541,6 +543,16 @@ class ObjectDef:
         }
 
 
+def deeptuple(l: list) -> tuple:
+    def deep_tuple_helper(x):
+        if isinstance(x, StringWithLineNumber):
+            return x
+        if isinstance(x, list):
+            return tuple(deep_tuple_helper(x) for x in x)
+        return x
+    return tuple(deep_tuple_helper(x) for x in l)
+
+
 class Interpreter(InterpreterBase):
     """
     Main interpreter class that subclasses InterpreterBase.
@@ -562,6 +574,8 @@ class Interpreter(InterpreterBase):
             super().error(
                 ErrorType.SYNTAX_ERROR, f"Parse error on program: {parsed_program}"
             )
+        assert isinstance(parsed_program, list)
+        parsed_program = deeptuple(parsed_program)
         self.__map_class_names_to_class_defs(parsed_program)
 
         # instantiate main class
@@ -572,7 +586,7 @@ class Interpreter(InterpreterBase):
 
         # call main function in main class; return value is ignored from main
         self.main_object.call_method(
-            InterpreterBase.MAIN_FUNC_DEF, [], invalid_line_num_of_caller
+            StringWithLineNumber(InterpreterBase.MAIN_FUNC_DEF, 0), (), invalid_line_num_of_caller
         )
 
         # program terminates!
@@ -596,7 +610,7 @@ class Interpreter(InterpreterBase):
         return obj
 
     def __map_class_names_to_class_defs(self, program):
-        self.class_index = {}
+        self.class_index: dict[StringWithLineNumber, ClassDef] = {}
         for item in program:
             if item[0] == InterpreterBase.CLASS_DEF:
                 if item[1] in self.class_index:
