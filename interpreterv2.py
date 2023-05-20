@@ -121,7 +121,7 @@ class EnvironmentManager:
     """
 
     def __init__(self, interpreter: 'Interpreter', method: 'MethodDef'):
-        self.environment: dict[StringWithLineNumber, tuple[ValueDef, VariableDef]] = {}
+        self.__environments: list[dict[StringWithLineNumber, tuple[ValueDef, VariableDef]]] = [{}]
         self.interpreter = interpreter
         self.method = method
 
@@ -129,11 +129,12 @@ class EnvironmentManager:
         """
         Get data associated with variable name.
         """
-        if symbol in self.environment:
-            return self.environment[symbol][0]
+        for env in reversed(self.__environments):
+            if symbol in env:
+                return env[symbol][0]
 
         return None
-        # return self.environment.get(symbol, Value(Type.NOTHING))
+        # return self.__environments.get(symbol, Value(Type.NOTHING))
 
     def set(self, symbol: StringWithLineNumber, value: 'ValueDef', allowed_type: StringWithLineNumber) -> None:
         """
@@ -150,16 +151,22 @@ class EnvironmentManager:
             allowed_types.add(type_mappings[allowed_type])
         # TODO check type of value, set null class_name
 
-        self.environment[symbol] = (value, VariableDef(allowed_types, allowed_classes))
+        self.__environments[-1][symbol] = (value, VariableDef(allowed_types, allowed_classes))
 
     def mutate(self, symbol: StringWithLineNumber, value: 'ValueDef') -> None:
-        assert symbol in self.environment
-        _, variable = self.environment[symbol]
-        if value.type() not in variable.allowed_types:
+        matched_env = None
+        for env in reversed(self.__environments):
+            if symbol in env:
+                matched_env = env
+                break
+
+        assert matched_env is not None and symbol in matched_env
+        matched_value, matched_variable = matched_env[symbol]
+        if value.type() not in matched_variable.allowed_types:
             self.interpreter.error(ErrorType.TYPE_ERROR)
         elif value.type() == Type.CLASS:
             pass
-        self.environment[symbol][0].mutate_value(value.value())
+        matched_value.mutate_value(value.value())
 
 
 class Type(Enum):
