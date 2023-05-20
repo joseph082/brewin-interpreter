@@ -224,8 +224,8 @@ class ValueDef:
         self.__value = val
 
     # def set2(self, other: Self):
-    #     self.__type = other.type()
-    #     self.__value = other.value()
+    #     self.__type = other.get_type()
+    #     self.__value = other.get_value()
 
 
 class VariableDef:
@@ -398,7 +398,7 @@ class ObjectDef:
 
         if status == ObjectDef.STATUS_RETURN:
             if return_type in type_mappings:
-                if type_mappings[return_type] != return_value.type():
+                if type_mappings[return_type] != return_value.get_type():
                     self.interpreter.error(ErrorType.TYPE_ERROR)
             else:
                 # todo check class type
@@ -424,7 +424,7 @@ class ObjectDef:
             - otherwise, the next statement in the method should run normally
         - return_value is a Value containing the returned value from the function
         """
-        if self.trace_output:
+        if self.trace_output or True:
             print(f"{code[0].line_num}: {code}")
         tok = code[0]
         if is_begin_statement(code):
@@ -734,38 +734,38 @@ class ObjectDef:
         self.unary_op_list = ["!"]
         self.binary_ops = {}  # : dict[Type, dict[str, Callable[[Value, Value], Value]]]
         self.binary_ops[Type.INT] = {
-            "+": lambda a, b: ValueDef(Type.INT, a.value() + b.value()),
-            "-": lambda a, b: ValueDef(Type.INT, a.value() - b.value()),
-            "*": lambda a, b: ValueDef(Type.INT, a.value() * b.value()),
+            "+": lambda a, b: ValueDef(Type.INT, a.get_value() + b.get_value()),
+            "-": lambda a, b: ValueDef(Type.INT, a.get_value() - b.get_value()),
+            "*": lambda a, b: ValueDef(Type.INT, a.get_value() * b.get_value()),
             "/": lambda a, b: ValueDef(
-                Type.INT, a.value() // b.value()
+                Type.INT, a.get_value() // b.get_value()
             ),  # // for integer ops
-            "%": lambda a, b: ValueDef(Type.INT, a.value() % b.value()),
-            "==": lambda a, b: ValueDef(Type.BOOL, a.value() == b.value()),
-            "!=": lambda a, b: ValueDef(Type.BOOL, a.value() != b.value()),
-            ">": lambda a, b: ValueDef(Type.BOOL, a.value() > b.value()),
-            "<": lambda a, b: ValueDef(Type.BOOL, a.value() < b.value()),
-            ">=": lambda a, b: ValueDef(Type.BOOL, a.value() >= b.value()),
-            "<=": lambda a, b: ValueDef(Type.BOOL, a.value() <= b.value()),
+            "%": lambda a, b: ValueDef(Type.INT, a.get_value() % b.get_value()),
+            "==": lambda a, b: ValueDef(Type.BOOL, a.get_value() == b.get_value()),
+            "!=": lambda a, b: ValueDef(Type.BOOL, a.get_value() != b.get_value()),
+            ">": lambda a, b: ValueDef(Type.BOOL, a.get_value() > b.get_value()),
+            "<": lambda a, b: ValueDef(Type.BOOL, a.get_value() < b.get_value()),
+            ">=": lambda a, b: ValueDef(Type.BOOL, a.get_value() >= b.get_value()),
+            "<=": lambda a, b: ValueDef(Type.BOOL, a.get_value() <= b.get_value()),
         }
         self.binary_ops[Type.STRING] = {
-            "+": lambda a, b: ValueDef(Type.STRING, a.value() + b.value()),
-            "==": lambda a, b: ValueDef(Type.BOOL, a.value() == b.value()),
-            "!=": lambda a, b: ValueDef(Type.BOOL, a.value() != b.value()),
-            ">": lambda a, b: ValueDef(Type.BOOL, a.value() > b.value()),
-            "<": lambda a, b: ValueDef(Type.BOOL, a.value() < b.value()),
-            ">=": lambda a, b: ValueDef(Type.BOOL, a.value() >= b.value()),
-            "<=": lambda a, b: ValueDef(Type.BOOL, a.value() <= b.value()),
+            "+": lambda a, b: ValueDef(Type.STRING, a.get_value() + b.get_value()),
+            "==": lambda a, b: ValueDef(Type.BOOL, a.get_value() == b.get_value()),
+            "!=": lambda a, b: ValueDef(Type.BOOL, a.get_value() != b.get_value()),
+            ">": lambda a, b: ValueDef(Type.BOOL, a.get_value() > b.get_value()),
+            "<": lambda a, b: ValueDef(Type.BOOL, a.get_value() < b.get_value()),
+            ">=": lambda a, b: ValueDef(Type.BOOL, a.get_value() >= b.get_value()),
+            "<=": lambda a, b: ValueDef(Type.BOOL, a.get_value() <= b.get_value()),
         }
         self.binary_ops[Type.BOOL] = {
-            "&": lambda a, b: ValueDef(Type.BOOL, a.value() and b.value()),
-            "|": lambda a, b: ValueDef(Type.BOOL, a.value() or b.value()),
-            "==": lambda a, b: ValueDef(Type.BOOL, a.value() == b.value()),
-            "!=": lambda a, b: ValueDef(Type.BOOL, a.value() != b.value()),
+            "&": lambda a, b: ValueDef(Type.BOOL, a.get_value() and b.get_value()),
+            "|": lambda a, b: ValueDef(Type.BOOL, a.get_value() or b.get_value()),
+            "==": lambda a, b: ValueDef(Type.BOOL, a.get_value() == b.get_value()),
+            "!=": lambda a, b: ValueDef(Type.BOOL, a.get_value() != b.get_value()),
         }
         self.binary_ops[Type.CLASS] = {
-            "==": lambda a, b: ValueDef(Type.BOOL, a.value() == b.value()),
-            "!=": lambda a, b: ValueDef(Type.BOOL, a.value() != b.value()),
+            "==": lambda a, b: ValueDef(Type.BOOL, a.get_value() == b.get_value()),
+            "!=": lambda a, b: ValueDef(Type.BOOL, a.get_value() != b.get_value()),
         }
 
         self.unary_ops: dict[Type, dict[str, Callable[[ValueDef], ValueDef]]] = {}
