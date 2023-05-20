@@ -123,9 +123,9 @@ def is_let_statement(s) -> TypeGuard[LetStatementType]:
     return s[0] == InterpreterBase.LET_DEF and is_statement(s) and len(s) >= 3
 
 
-def assignment_type_check(val: 'ValueDef', variable: 'VariableDef', err: Callable[[ErrorType], NoReturn]) -> None | NoReturn:
+def assignment_type_check(val: 'ValueDef', variable: 'VariableDef') -> bool:
     if val.get_type() not in variable.allowed_types:
-        err(ErrorType.TYPE_ERROR)
+        return False
 
     if val.get_type() == Type.CLASS:
         actual_value = val.get_value()
@@ -135,10 +135,9 @@ def assignment_type_check(val: 'ValueDef', variable: 'VariableDef', err: Callabl
         else:
             assert isinstance(actual_value, ObjectDef)
 
-        pass
         # todo, polymorphism
 
-    return
+    return True
 
 
 class EnvironmentManager:
@@ -182,7 +181,8 @@ class EnvironmentManager:
         # TODO check type of value, set null class_name
 
         new_var = VariableDef(allowed_types, allowed_classes)
-        assignment_type_check(value, new_var, self.interpreter.error)
+        if not assignment_type_check(value, new_var):
+            self.interpreter.error(ErrorType.TYPE_ERROR)
 
         self.__environments[-1][symbol] = (value, new_var)
 
@@ -195,7 +195,8 @@ class EnvironmentManager:
 
         assert matched_env is not None and symbol in matched_env
         matched_value, matched_variable = matched_env[symbol]
-        assignment_type_check(value, matched_variable, self.interpreter.error)
+        if not assignment_type_check(value, matched_variable):
+            self.interpreter.error(ErrorType.TYPE_ERROR)
         matched_value.mutate_value(value.get_value())
 
     def create_env(self):
@@ -387,7 +388,21 @@ class ObjectDef:
         if len(args) != len(method.formal_params):
             return False
         for formal, actual in zip(method.formal_params, args):
-            pass
+            # same code in env.set
+            allowed_type = formal[0]
+            allowed_types: set[Type] = set()
+            allowed_classes: set[StringWithLineNumber] = set()
+            type_mappings = {InterpreterBase.INT_DEF: Type.INT, InterpreterBase.BOOL_DEF: Type.BOOL, InterpreterBase.STRING_DEF: Type.STRING}
+            if allowed_type not in type_mappings:
+                allowed_types.add(Type.CLASS)
+                allowed_classes.add(allowed_type)
+            else:
+                allowed_types.add(type_mappings[allowed_type])
+            # TODO check type of value, set null class_name
+
+            new_var = VariableDef(allowed_types, allowed_classes)
+            if not assignment_type_check(actual, new_var):
+                return False
         return True
 
     def call_method(self, method_name: StringWithLineNumber, actual_params: tuple[ValueDef, ...], line_num_of_caller):
@@ -487,7 +502,7 @@ class ObjectDef:
     # (begin (statement1) (statement2) ... (statementn))
     def __execute_begin(self, env: EnvironmentManager, code: BeginStatementType):
         for statement in code[1:]:
-            # assert is_statement(statement)
+            assert is_statement(statement)
             status, return_value = self.__execute_statement(env, statement)
             if status == ObjectDef.STATUS_RETURN:
                 return (
@@ -585,7 +600,8 @@ class ObjectDef:
                 ErrorType.NAME_ERROR, "unknown variable " + var_name, line_num
             )
         field_var = self.obj_fields[var_name][1]
-        assignment_type_check(value, field_var, self.interpreter.error)
+        if not assignment_type_check(value, field_var):
+            self.interpreter.error(ErrorType.TYPE_ERROR)
 
         self.obj_fields[var_name][0].mutate_value(value.get_value())
 
@@ -762,7 +778,8 @@ class ObjectDef:
             field_val = create_value(field.default_field_value, field.type)
             assert field_val is not None
             field_variable = VariableDef(allowed_types, allowed_classes)
-            assignment_type_check(field_val, field_variable, self.interpreter.error)
+            if not assignment_type_check(field_val, field_variable):
+                self.interpreter.error(ErrorType.TYPE_ERROR)
             self.obj_fields[field.field_name] = (field_val, field_variable)
 
     def __create_map_of_operations_to_lambdas(self):
