@@ -102,7 +102,7 @@ def is_field_statement(f) -> TypeGuard[FieldStatementType]:
     return is_statement(f) and len(f) == 4 and f[0] == InterpreterBase.FIELD_DEF
 
 
-def is_class_members_type(c: tuple[MethodOrFieldType | StringWithLineNumber, ...]) -> TypeGuard[ClassMembersType]:
+def is_class_members_type(c: tuple[MethodOrFieldType | StringWithLineNumber | StatementType, ...]) -> TypeGuard[ClassMembersType]:
     return all(is_method_statement(x) or is_field_statement(x) for x in c)
 
 
@@ -210,7 +210,7 @@ class VariableDef:
         self.allowed_classes = allowed_classes
 
 
-def create_value(val: StringWithLineNumber) -> ValueDef | None:
+def create_value(val: StringWithLineNumber, class_name: StringWithLineNumber = StringWithLineNumber('_', 0)) -> ValueDef | None:
     """
     Create a Value object from a Python value.
     """
@@ -223,7 +223,7 @@ def create_value(val: StringWithLineNumber) -> ValueDef | None:
     if val.lstrip('-').isnumeric():
         return ValueDef(Type.INT, int(val))
     if val == InterpreterBase.NULL_DEF:
-        return ValueDef(Type.CLASS, None)
+        return ValueDef(Type.CLASS, None, class_name=class_name)
     if val == InterpreterBase.NOTHING_DEF:
         return ValueDef(Type.NOTHING, None)
     # assert False
@@ -445,7 +445,7 @@ class ObjectDef:
                 InterpreterBase.FALSE_DEF, 0), InterpreterBase.STRING_DEF: StringWithLineNumber('""', 0), InterpreterBase.VOID_DEF: StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0)}
             return_type = env.method.return_type
             # return ObjectDef.STATUS_RETURN, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
-            return ObjectDef.STATUS_RETURN, create_value(return_defaults.get(return_type, StringWithLineNumber(InterpreterBase.NULL_DEF, 0)))
+            return ObjectDef.STATUS_RETURN, create_value(return_defaults.get(return_type, StringWithLineNumber(InterpreterBase.NULL_DEF, 0)), env.method.return_type)
         return ObjectDef.STATUS_RETURN, self.__evaluate_expression(
             env, code[1], code[0].line_num
         )
@@ -670,7 +670,7 @@ class ObjectDef:
                 allowed_classes.add(field.type)
             else:
                 allowed_types.add(type_mappings[field.type])
-            field_val = create_value(field.default_field_value)
+            field_val = create_value(field.default_field_value, field.type)
             assert field_val is not None
             # todo type check
             self.obj_fields[field.field_name] = (field_val, VariableDef(allowed_types, allowed_classes))
