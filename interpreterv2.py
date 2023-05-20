@@ -381,7 +381,7 @@ class ObjectDef:
         self.__map_fields_to_values()
         self.__map_method_names_to_method_definitions()
         self.__create_map_of_operations_to_lambdas()  # sets up maps to facilitate binary and unary operations, e.g., (+ 5 6)
-        self.parent_object = None if class_def.parent_class_def is None else ObjectDef(interpreter, class_def.parent_class_def)
+        self.parent_object = None if class_def.parent_class_def is None else ObjectDef(interpreter, class_def.parent_class_def, trace_output)
 
     def call_method(self, method_name: StringWithLineNumber, actual_params: tuple[ValueDef, ...], line_num_of_caller):
         """
