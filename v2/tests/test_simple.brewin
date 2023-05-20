@@ -1,0 +1,26 @@
+
+(class main2
+ (method int add ((int a) (int b))
+    (return (+ a b))
+ )
+ (field int q 5)
+ (method void main ()
+  (print (call me add 1000 q))
+ )
+)
+
+(class main
+(field main2 d null)
+ (method int add ((int a) (int b))
+    (return (+ a b))
+ )
+ (field int q 5)
+ (method void main ()
+  (begin (print (call me add 1000 q))
+   (call (call me m) main)
+    )
+ )
+ (method main2 m ()
+  (return (new main2))
+ )
+)

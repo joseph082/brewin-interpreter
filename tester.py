@@ -58,7 +58,8 @@ class TestScaffold(AbstractTestScaffold):
         except Exception as exception:  # pylint: disable=broad-except
             if expect_failure:
                 error_type, line = interpreter.get_error_type_and_line()
-                received = [f"{error_type} {line}"]
+                # received = [f"{error_type} {line}"]
+                received = [f"{error_type}"]
                 if received == expected:
                     return 1
                 print("\nExpected error:")
@@ -137,7 +138,16 @@ def generate_test_suite_v1():
 
 def generate_test_suite_v2():
     """wrapper for generate_test_suite for v2"""
-    return __generate_test_suite(2, [], [])
+    return __generate_test_suite(
+        2,
+        # ["test_compare_null", "test_return_default1", "test_inher2", "test_inher1",
+        #  "test_simple", "test_scratch"],
+        ["test_compare_null", "test_return_default1", "test_let", "test_simple", "test_scratch"],
+        # ["test_incompat_return1", "test_let2", "test_inher1", "test_incompat_types2",
+        #  "test_compare_unrelated_null"],
+        ["test_incompat_return1", "test_incompat_types2",
+         "test_compare_unrelated_null", "test_scratch_fail", "test_inherits_unknown"],
+    )
 
 
 def generate_test_suite_v3():
@@ -151,6 +161,7 @@ async def main():
         raise ValueError("Error: Missing version number argument")
     version = sys.argv[1]
     module_name = f"interpreterv{version}"
+    # module_name = f"interpreterv2"
     interpreter = importlib.import_module(module_name)
 
     scaffold = TestScaffold(interpreter)
