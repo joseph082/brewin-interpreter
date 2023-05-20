@@ -75,7 +75,7 @@ def is_new_expression(s: StatementType) -> TypeGuard[NewExpressionType]:
 
 
 def is_while_statement(s: StatementType) -> TypeGuard[WhileStatementType]:
-    return s[0] == InterpreterBase.WHILE_DEF and len(s) == 3 and is_statement(s[1]) and is_statement(s[2])
+    return s[0] == InterpreterBase.WHILE_DEF and len(s) == 3 and is_expression(s[1]) and is_statement(s[2])
 
 
 def is_if_statement(s: StatementType) -> TypeGuard[IfStatementType]:
