@@ -302,7 +302,7 @@ class ClassDef:
                     )
 
                 field_type = member[1]
-                if field_type not in self.__types and field_type not in self.interpreter.class_index:
+                if field_type not in self.__types and field_type not in self.interpreter.class_index and field_type != self.name:
                     self.interpreter.error(ErrorType.TYPE_ERROR)
                 self.class_fields[member[2]] = FieldDef(member)
 
