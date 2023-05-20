@@ -21,11 +21,9 @@ IfStatementType = Union[tuple[StringWithLineNumber, StatementType, StatementType
 BeginStatementType = tuple[StringWithLineNumber, tuple[StatementType, *tuple[StatementType, ...]]]
 WhileStatementType = tuple[StringWithLineNumber, StatementType, StatementType]
 
-MethodStatementType = tuple[StringWithLineNumber, StringWithLineNumber, tuple[StringWithLineNumber, ...], StatementType]
-# MethodStatementType = tuple[StringWithLineNumber, StringWithLineNumber, StringWithLineNumber, tuple[tuple[StringWithLineNumber, StringWithLineNumber], ...], StatementType]
+MethodStatementType = tuple[StringWithLineNumber, StringWithLineNumber, StringWithLineNumber, tuple[tuple[StringWithLineNumber, StringWithLineNumber], ...], StatementType]
 FieldValueType = Union[int, StringWithLineNumber, bool, None, str, 'ObjectDef']
-FieldStatementType = tuple[StringWithLineNumber,  StringWithLineNumber, StringWithLineNumber]
-# FieldStatementType = tuple[StringWithLineNumber, StringWithLineNumber,  StringWithLineNumber, StringWithLineNumber]
+FieldStatementType = tuple[StringWithLineNumber, StringWithLineNumber,  StringWithLineNumber, StringWithLineNumber]
 MethodOrFieldType = Union[MethodStatementType, FieldStatementType]
 
 CallExpressionType = tuple[StringWithLineNumber, StatementType, StringWithLineNumber, *tuple[StatementType, ...]]
@@ -35,7 +33,8 @@ ClassMembersType = tuple[MethodOrFieldType, *tuple[MethodOrFieldType, ...]]
 
 # ClassStatementType = tuple[StringWithLineNumber, StringWithLineNumber, MethodOrFieldType, *tuple[MethodOrFieldType, ...]]
 # ClassStatementType = tuple[StringWithLineNumber, StringWithLineNumber, *ClassMembersType]
-ClassStatementType = tuple[StringWithLineNumber, StringWithLineNumber, MethodOrFieldType, *tuple[MethodOrFieldType, ...]]
+ClassStatementType = Union[tuple[StringWithLineNumber, StringWithLineNumber, MethodOrFieldType, *tuple[MethodOrFieldType, ...]],
+                           tuple[StringWithLineNumber, StringWithLineNumber, StringWithLineNumber, StringWithLineNumber, MethodOrFieldType, *tuple[MethodOrFieldType, ...]]]
 ParsedProgramType = tuple[ClassStatementType, *tuple[ClassStatementType, ...]]  # tuple of class statements
 
 
@@ -96,11 +95,11 @@ def is_return_expression(s: StatementType) -> TypeGuard[ReturnExpressionType]:
 
 
 def is_method_statement(m) -> TypeGuard[MethodStatementType]:
-    return is_statement(m) and len(m) == 4 and m[0] == InterpreterBase.METHOD_DEF
+    return is_statement(m) and len(m) == 5 and m[0] == InterpreterBase.METHOD_DEF
 
 
 def is_field_statement(f) -> TypeGuard[FieldStatementType]:
-    return isinstance(f, tuple) and len(f) == 3 and f[0] == InterpreterBase.FIELD_DEF
+    return is_statement(f) and len(f) == 4 and f[0] == InterpreterBase.FIELD_DEF
 
 
 def is_class_members_type(c: tuple[MethodOrFieldType | StringWithLineNumber, ...]) -> TypeGuard[ClassMembersType]:
@@ -108,7 +107,8 @@ def is_class_members_type(c: tuple[MethodOrFieldType | StringWithLineNumber, ...
 
 
 def is_class_statement(c) -> TypeGuard[ClassStatementType]:
-    return isinstance(c, tuple) and len(c) >= 3 and c[0] == InterpreterBase.CLASS_DEF and is_StringWithLineNumber(c[1]) and is_class_members_type(c[2:])  # method/field
+    # method/field
+    return is_statement(c) and len(c) >= 3 and c[0] == InterpreterBase.CLASS_DEF and is_StringWithLineNumber(c[1]) and (c[2] == InterpreterBase.INHERITS_DEF and is_StringWithLineNumber(c[3]) and is_class_members_type(c[4:]) or is_class_members_type(c[2:]))
 
 
 class EnvironmentManager:
@@ -120,26 +120,52 @@ class EnvironmentManager:
     and a value (e.g., Int, 10).
     """
 
-    def __init__(self):
-        self.environment: dict[StringWithLineNumber, Value] = {}
+    def __init__(self, interpreter: 'Interpreter', method: 'MethodDef'):
+        self.environment: dict[StringWithLineNumber, tuple[ValueDef, VariableDef]] = {}
+        self.interpreter = interpreter
+        self.method = method
 
-    def get(self, symbol: StringWithLineNumber) -> Union['Value', None]:
+    def get(self, symbol: StringWithLineNumber) -> Union['ValueDef', None]:
         """
         Get data associated with variable name.
         """
-        return self.environment.get(symbol, None)
+        if symbol in self.environment:
+            return self.environment[symbol][0]
+
+        return None
         # return self.environment.get(symbol, Value(Type.NOTHING))
 
-    def set(self, symbol: StringWithLineNumber, value: 'Value') -> None:
+    def set(self, symbol: StringWithLineNumber, value: 'ValueDef', allowed_type: StringWithLineNumber) -> None:
         """
         Set data associated with a variable name.
         """
-        self.environment[symbol] = value
+        assert is_StringWithLineNumber(allowed_type)
+        allowed_types: set[Type] = set()
+        allowed_classes: set[StringWithLineNumber] = set()
+        type_mappings = {InterpreterBase.INT_DEF: Type.INT, InterpreterBase.BOOL_DEF: Type.BOOL, InterpreterBase.STRING_DEF: Type.STRING}
+        if allowed_type not in type_mappings:
+            allowed_types.add(Type.CLASS)
+            allowed_classes.add(allowed_type)
+        else:
+            allowed_types.add(type_mappings[allowed_type])
+        # TODO check type of value, set null class_name
+
+        self.environment[symbol] = (value, VariableDef(allowed_types, allowed_classes))
+
+    def mutate(self, symbol: StringWithLineNumber, value: 'ValueDef') -> None:
+        assert symbol in self.environment
+        _, variable = self.environment[symbol]
+        if value.type() not in variable.allowed_types:
+            self.interpreter.error(ErrorType.TYPE_ERROR)
+        elif value.type() == Type.CLASS:
+            pass
+        self.environment[symbol][0].mutate_value(value.value())
 
 
 class Type(Enum):
     """Enum for all possible Brewin types."""
-
+    # todo change to prime numbers for type concat/union? or just use set
+    # print(Type.INT.value)
     INT = 1
     BOOL = 2
     STRING = 3
@@ -148,13 +174,21 @@ class Type(Enum):
 
 
 # Represents a value, which has a type and its value
-class Value:
+class ValueDef:
     """A representation for a value that contains a type tag."""
 
-    def __init__(self, value_type: Type, value: FieldValueType = None):
+    def __init__(self, value_type: Type, value: FieldValueType = None, **kwargs):
         # (value_type)
         self.__type = value_type
         self.__value = value
+        if value_type == Type.CLASS:
+            if value is None:
+                self.class_name = StringWithLineNumber(InterpreterBase.NULL_DEF, 0)
+            else:
+                self.class_name = kwargs['class_name']
+                assert is_StringWithLineNumber(self.class_name)
+        else:
+            self.class_name = None
 
     def type(self) -> Type:
         return self.__type
@@ -162,27 +196,37 @@ class Value:
     def value(self) -> FieldValueType:
         return self.__value
 
-    def set(self, other: Self):
-        self.__type = other.type()
-        self.__value = other.value()
+    def mutate_value(self, val: FieldValueType) -> None:
+        self.__value = val
+
+    # def set2(self, other: Self):
+    #     self.__type = other.type()
+    #     self.__value = other.value()
 
 
-def create_value(val: StringWithLineNumber):
+class VariableDef:
+    def __init__(self, allowed_types: set[Type], allowed_classes: set[StringWithLineNumber]):
+        self.allowed_types = allowed_types
+        self.allowed_classes = allowed_classes
+
+
+def create_value(val: StringWithLineNumber) -> ValueDef | None:
     """
     Create a Value object from a Python value.
     """
     if val == InterpreterBase.TRUE_DEF:
-        return Value(Type.BOOL, True)
+        return ValueDef(Type.BOOL, True)
     if val == InterpreterBase.FALSE_DEF:
-        return Value(Type.BOOL, False)
+        return ValueDef(Type.BOOL, False)
     if val[0] == '"':
-        return Value(Type.STRING, val.strip('"'))
+        return ValueDef(Type.STRING, val.strip('"'))
     if val.lstrip('-').isnumeric():
-        return Value(Type.INT, int(val))
+        return ValueDef(Type.INT, int(val))
     if val == InterpreterBase.NULL_DEF:
-        return Value(Type.CLASS, None)
+        return ValueDef(Type.CLASS, None)
     if val == InterpreterBase.NOTHING_DEF:
-        return Value(Type.NOTHING, None)
+        return ValueDef(Type.NOTHING, None)
+    # assert False
     return None
 
 
@@ -192,9 +236,10 @@ class MethodDef:
     """
 
     def __init__(self, method_def: MethodStatementType):
-        self.method_name = method_def[1]
-        self.formal_params = method_def[2]
-        self.code = method_def[3]
+        self.method_name = method_def[2]
+        self.formal_params = method_def[3]
+        self.code = method_def[4]
+        self.return_type = method_def[1]
 
 
 class FieldDef:
@@ -203,8 +248,9 @@ class FieldDef:
     """
 
     def __init__(self, field_def: FieldStatementType):
-        self.field_name = field_def[1]
-        self.default_field_value = field_def[2]
+        self.field_name = field_def[2]
+        self.default_field_value = field_def[3]
+        self.type = field_def[1]
 
 
 class ClassDef:
@@ -219,7 +265,14 @@ class ClassDef:
     def __init__(self, class_def: ClassStatementType, interpreter: 'Interpreter'):
         self.interpreter = interpreter
         self.name = class_def[1]
-        members = class_def[2:]
+        self.__types = {InterpreterBase.INT_DEF, InterpreterBase.BOOL_DEF, InterpreterBase.STRING_DEF}
+        if class_def[2] == InterpreterBase.INHERITS_DEF:
+            members = class_def[4:]
+            assert is_StringWithLineNumber(class_def[3])
+            self.parent_class = class_def[3]
+        else:
+            members = class_def[2:]
+            self.parent_class = StringWithLineNumber('', 0)
         assert is_class_members_type(members)
         self.__create_field_list(members)
         self.__create_method_list(members)
@@ -241,25 +294,32 @@ class ClassDef:
 
         for member in class_body:
             if is_field_statement(member):
-                if member[1] in self.class_fields:  # redefinition
+                if member[2] in self.class_fields:  # redefinition
                     self.interpreter.error(
                         ErrorType.NAME_ERROR,
                         "duplicate field " + member[1],
                         member[0].line_num,
                     )
-                self.class_fields[member[1]] = FieldDef(member)
+
+                field_type = member[1]
+                if field_type not in self.__types and field_type not in self.interpreter.class_index:
+                    self.interpreter.error(ErrorType.TYPE_ERROR)
+                self.class_fields[member[2]] = FieldDef(member)
 
     def __create_method_list(self, class_body: ClassMembersType):
         self.class_methods: dict[StringWithLineNumber, MethodDef] = {}
         for member in class_body:
             if is_method_statement(member):
-                if member[1] in self.class_methods:  # redefinition
+                if member[2] in self.class_methods:  # redefinition
                     self.interpreter.error(
                         ErrorType.NAME_ERROR,
                         "duplicate method " + member[1],
                         member[0].line_num,
                     )
-                self.class_methods[member[1]] = (MethodDef(member))
+                return_type = member[1]
+                if return_type != InterpreterBase.VOID_DEF and return_type not in self.__types and return_type not in self.interpreter.class_index:
+                    self.interpreter.error(ErrorType.TYPE_ERROR)
+                self.class_methods[member[2]] = MethodDef(member)
                 # methods_defined_so_far.add(member[1])
 
 
@@ -277,7 +337,7 @@ class ObjectDef:
         self.__map_method_names_to_method_definitions()
         self.__create_map_of_operations_to_lambdas()  # sets up maps to facilitate binary and unary operations, e.g., (+ 5 6)
 
-    def call_method(self, method_name: StringWithLineNumber, actual_params: tuple[Value, ...], line_num_of_caller):
+    def call_method(self, method_name: StringWithLineNumber, actual_params: tuple[ValueDef, ...], line_num_of_caller):
         """
         actual_params is a list of Value objects (all parameters are passed by value).
 
@@ -298,11 +358,12 @@ class ObjectDef:
                 line_num_of_caller,
             )
         env = (
-            EnvironmentManager()
+            EnvironmentManager(self.interpreter, method_info)
         )  # maintains lexical environment for function; just params for now
+        # print(list(zip(method_info.formal_params, actual_params)))
         for formal, actual in zip(method_info.formal_params, actual_params):
-            assert is_StringWithLineNumber(formal)
-            env.set(formal, actual)
+            # assert is_StringWithLineNumber(formal)
+            env.set(formal[1], actual, formal[0])
         # since each method has a single top-level statement, execute it.
         status, return_value = self.__execute_statement(env, method_info.code)
         # if the method explicitly used the (return expression) statement to return a value, then return that
@@ -311,7 +372,7 @@ class ObjectDef:
             return return_value
         # The method didn't explicitly return a value, so return a value of type nothing
         # return Value(InterpreterBase.NOTHING_DEF)
-        return Value(Type.NOTHING)
+        return ValueDef(Type.NOTHING)
 
     def __execute_statement(self, env: EnvironmentManager, code: StatementType):
         """
@@ -361,7 +422,7 @@ class ObjectDef:
         return ObjectDef.STATUS_PROCEED, None
 
     # (call object_ref/me methodname param1 param2 param3)
-    # where params are expressions, and expresion could be a value, or a (+ ...)
+    # where params are expressions, and expression could be a value, or a (+ ...)
     # statement version of a method call; there's also an expression version of a method call below
     def __execute_call(self, env: EnvironmentManager, code: CallExpressionType):
         assert is_StringWithLineNumber(code[0])
@@ -369,22 +430,27 @@ class ObjectDef:
             env, code, code[0].line_num
         )
 
-    # (set varname expression), where expresion could be a value, or a (+ ...)
+    # (set varname expression), where expression could be a value, or a (+ ...)
     def __execute_set(self, env: EnvironmentManager, code: SetStatementType):
         val = self.__evaluate_expression(env, code[2], code[0].line_num)
         self.__set_variable_aux(env, code[1], val, code[0].line_num)
         return ObjectDef.STATUS_PROCEED, None
 
-    # (return expression) where expresion could be a value, or a (+ ...)
+    # (return expression) where expression could be a value, or a (+ ...)
     def __execute_return(self, env: EnvironmentManager, code: ReturnExpressionType):
         if len(code) == 1:
             # [return] with no return expression
-            return ObjectDef.STATUS_RETURN, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
+
+            return_defaults = {InterpreterBase.INT_DEF: StringWithLineNumber('0', 0), InterpreterBase.BOOL_DEF: StringWithLineNumber(
+                InterpreterBase.FALSE_DEF, 0), InterpreterBase.STRING_DEF: StringWithLineNumber('""', 0), InterpreterBase.VOID_DEF: StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0)}
+            return_type = env.method.return_type
+            # return ObjectDef.STATUS_RETURN, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
+            return ObjectDef.STATUS_RETURN, create_value(return_defaults.get(return_type, StringWithLineNumber(InterpreterBase.NULL_DEF, 0)))
         return ObjectDef.STATUS_RETURN, self.__evaluate_expression(
             env, code[1], code[0].line_num
         )
 
-    # (print expression1 expression2 ...) where expresion could be a variable, value, or a (+ ...)
+    # (print expression1 expression2 ...) where expression could be a variable, value, or a (+ ...)
     def __execute_print(self, env: EnvironmentManager, code: PrintStatementType):
         output = ""
         assert is_StringWithLineNumber(code[0])
@@ -398,6 +464,7 @@ class ObjectDef:
             # document - will never print out an object ref
             output += str(val)
         self.interpreter.output(output)
+        print(f'output: {output}')
         return ObjectDef.STATUS_PROCEED, None
 
     # (inputs target_variable) or (inputi target_variable) sets target_variable to input string/int
@@ -405,33 +472,35 @@ class ObjectDef:
         inp = self.interpreter.get_input()
         assert isinstance(inp, str)
         if get_string:
-            val = Value(Type.STRING, inp)
+            val = ValueDef(Type.STRING, inp)
         else:
-            val = Value(Type.INT, int(inp))
+            val = ValueDef(Type.INT, int(inp))
 
         self.__set_variable_aux(env, code[1], val, code[0].line_num)
         return ObjectDef.STATUS_PROCEED, None
 
     # helper method used to set either parameter variables or member fields; parameters currently shadow
     # member fields
-    def __set_variable_aux(self, env: EnvironmentManager, var_name: StringWithLineNumber, value: Value, line_num):
+    def __set_variable_aux(self, env: EnvironmentManager, var_name: StringWithLineNumber, value: ValueDef, line_num):
         # parameter shadows fields
         if value.type() == Type.NOTHING:
             self.interpreter.error(
                 ErrorType.TYPE_ERROR, "can't assign to nothing " + var_name, line_num
             )
         param_val = env.get(var_name)
-        if param_val is not None:
-            env.set(var_name, value)
+        if param_val is not None:  # in params
+            # todo: check type. if class type but no class_name, set it here
+            env.mutate(var_name, value)
             return
 
         if var_name not in self.obj_fields:
             self.interpreter.error(
                 ErrorType.NAME_ERROR, "unknown variable " + var_name, line_num
             )
-        self.obj_fields[var_name] = value
+        # todo type check
+        self.obj_fields[var_name][0].mutate_value(value.value())
 
-    # (if expression (statement) (statement) ) where expresion could be a boolean constant (e.g., true), member
+    # (if expression (statement) (statement) ) where expression could be a boolean constant (e.g., true), member
     # variable without ()s, or a boolean expression in parens, like (> 5 a)
     def __execute_if(self, env: EnvironmentManager, code: IfStatementType):
         condition = self.__evaluate_expression(env, code[1], code[0].line_num)
@@ -453,7 +522,7 @@ class ObjectDef:
             return status, return_value
         return ObjectDef.STATUS_PROCEED, None
 
-    # (while expression (statement) ) where expresion could be a boolean value, boolean member variable,
+    # (while expression (statement) ) where expression could be a boolean value, boolean member variable,
     # or a boolean expression in parens, like (> 5 a)
     def __execute_while(self, env: EnvironmentManager, code: WhileStatementType) -> tuple:
         while True:
@@ -477,7 +546,7 @@ class ObjectDef:
     # given an expression, return a Value object with the expression's evaluated result
     # expressions could be: constants (true, 5, "blah"), variables (e.g., x), arithmetic/string/logical expressions
     # like (+ 5 6), (+ "abc" "def"), (> a 5), method calls (e.g., (call me foo)), or instantiations (e.g., new dog_class)
-    def __evaluate_expression(self, env: EnvironmentManager, expr: ExpressionType, line_num_of_statement) -> Value:
+    def __evaluate_expression(self, env: EnvironmentManager, expr: ExpressionType, line_num_of_statement) -> ValueDef:
         if not isinstance(expr, tuple):
             assert is_StringWithLineNumber(expr)
             # locals shadow member variables
@@ -485,7 +554,7 @@ class ObjectDef:
             if val is not None:
                 return val
             if expr in self.obj_fields:
-                return self.obj_fields[expr]
+                return self.obj_fields[expr][0]
             # need to check for variable name and get its value too
             value = create_value(expr)
             if value is not None:
@@ -561,7 +630,7 @@ class ObjectDef:
     # (new classname)
     def __execute_new_aux(self, _, code: NewExpressionType, line_num_of_statement):
         obj = self.interpreter.instantiate(code[1], line_num_of_statement)
-        return Value(Type.CLASS, obj)
+        return ValueDef(Type.CLASS, obj, class_name=code[1])
 
     # this method is a helper used by call statements and call expressions
     # (call object_ref/me methodname p1 p2 p3)
@@ -590,9 +659,21 @@ class ObjectDef:
             self.obj_methods[method.method_name] = method
 
     def __map_fields_to_values(self):
-        self.obj_fields = {}
+        self.obj_fields: dict[StringWithLineNumber, tuple[ValueDef, VariableDef]] = {}
         for field in self.class_def.get_fields():
-            self.obj_fields[field.field_name] = create_value(field.default_field_value)
+            type_mappings = {InterpreterBase.INT_DEF: Type.INT, InterpreterBase.BOOL_DEF: Type.BOOL, InterpreterBase.STRING_DEF: Type.STRING}
+            allowed_types: set[Type] = set()
+            allowed_classes: set[StringWithLineNumber] = set()
+
+            if field.type not in type_mappings:
+                allowed_types.add(Type.CLASS)
+                allowed_classes.add(field.type)
+            else:
+                allowed_types.add(type_mappings[field.type])
+            field_val = create_value(field.default_field_value)
+            assert field_val is not None
+            # todo type check
+            self.obj_fields[field.field_name] = (field_val, VariableDef(allowed_types, allowed_classes))
 
     def __create_map_of_operations_to_lambdas(self):
         self.binary_op_list = [
@@ -613,43 +694,43 @@ class ObjectDef:
         self.unary_op_list = ["!"]
         self.binary_ops = {}  # : dict[Type, dict[str, Callable[[Value, Value], Value]]]
         self.binary_ops[Type.INT] = {
-            "+": lambda a, b: Value(Type.INT, a.value() + b.value()),
-            "-": lambda a, b: Value(Type.INT, a.value() - b.value()),
-            "*": lambda a, b: Value(Type.INT, a.value() * b.value()),
-            "/": lambda a, b: Value(
+            "+": lambda a, b: ValueDef(Type.INT, a.value() + b.value()),
+            "-": lambda a, b: ValueDef(Type.INT, a.value() - b.value()),
+            "*": lambda a, b: ValueDef(Type.INT, a.value() * b.value()),
+            "/": lambda a, b: ValueDef(
                 Type.INT, a.value() // b.value()
             ),  # // for integer ops
-            "%": lambda a, b: Value(Type.INT, a.value() % b.value()),
-            "==": lambda a, b: Value(Type.BOOL, a.value() == b.value()),
-            "!=": lambda a, b: Value(Type.BOOL, a.value() != b.value()),
-            ">": lambda a, b: Value(Type.BOOL, a.value() > b.value()),
-            "<": lambda a, b: Value(Type.BOOL, a.value() < b.value()),
-            ">=": lambda a, b: Value(Type.BOOL, a.value() >= b.value()),
-            "<=": lambda a, b: Value(Type.BOOL, a.value() <= b.value()),
+            "%": lambda a, b: ValueDef(Type.INT, a.value() % b.value()),
+            "==": lambda a, b: ValueDef(Type.BOOL, a.value() == b.value()),
+            "!=": lambda a, b: ValueDef(Type.BOOL, a.value() != b.value()),
+            ">": lambda a, b: ValueDef(Type.BOOL, a.value() > b.value()),
+            "<": lambda a, b: ValueDef(Type.BOOL, a.value() < b.value()),
+            ">=": lambda a, b: ValueDef(Type.BOOL, a.value() >= b.value()),
+            "<=": lambda a, b: ValueDef(Type.BOOL, a.value() <= b.value()),
         }
         self.binary_ops[Type.STRING] = {
-            "+": lambda a, b: Value(Type.STRING, a.value() + b.value()),
-            "==": lambda a, b: Value(Type.BOOL, a.value() == b.value()),
-            "!=": lambda a, b: Value(Type.BOOL, a.value() != b.value()),
-            ">": lambda a, b: Value(Type.BOOL, a.value() > b.value()),
-            "<": lambda a, b: Value(Type.BOOL, a.value() < b.value()),
-            ">=": lambda a, b: Value(Type.BOOL, a.value() >= b.value()),
-            "<=": lambda a, b: Value(Type.BOOL, a.value() <= b.value()),
+            "+": lambda a, b: ValueDef(Type.STRING, a.value() + b.value()),
+            "==": lambda a, b: ValueDef(Type.BOOL, a.value() == b.value()),
+            "!=": lambda a, b: ValueDef(Type.BOOL, a.value() != b.value()),
+            ">": lambda a, b: ValueDef(Type.BOOL, a.value() > b.value()),
+            "<": lambda a, b: ValueDef(Type.BOOL, a.value() < b.value()),
+            ">=": lambda a, b: ValueDef(Type.BOOL, a.value() >= b.value()),
+            "<=": lambda a, b: ValueDef(Type.BOOL, a.value() <= b.value()),
         }
         self.binary_ops[Type.BOOL] = {
-            "&": lambda a, b: Value(Type.BOOL, a.value() and b.value()),
-            "|": lambda a, b: Value(Type.BOOL, a.value() or b.value()),
-            "==": lambda a, b: Value(Type.BOOL, a.value() == b.value()),
-            "!=": lambda a, b: Value(Type.BOOL, a.value() != b.value()),
+            "&": lambda a, b: ValueDef(Type.BOOL, a.value() and b.value()),
+            "|": lambda a, b: ValueDef(Type.BOOL, a.value() or b.value()),
+            "==": lambda a, b: ValueDef(Type.BOOL, a.value() == b.value()),
+            "!=": lambda a, b: ValueDef(Type.BOOL, a.value() != b.value()),
         }
         self.binary_ops[Type.CLASS] = {
-            "==": lambda a, b: Value(Type.BOOL, a.value() == b.value()),
-            "!=": lambda a, b: Value(Type.BOOL, a.value() != b.value()),
+            "==": lambda a, b: ValueDef(Type.BOOL, a.value() == b.value()),
+            "!=": lambda a, b: ValueDef(Type.BOOL, a.value() != b.value()),
         }
 
-        self.unary_ops: dict[Type, dict[str, Callable[[Value], Value]]] = {}
+        self.unary_ops: dict[Type, dict[str, Callable[[ValueDef], ValueDef]]] = {}
         self.unary_ops[Type.BOOL] = {
-            "!": lambda a: Value(Type.BOOL, not a.value()),
+            "!": lambda a: ValueDef(Type.BOOL, not a.value()),
         }
 
 
@@ -732,3 +813,11 @@ class Interpreter(InterpreterBase):
                     )
                 assert is_StringWithLineNumber(item[1])
                 self.class_index[item[1]] = ClassDef(item, self)
+
+
+def main():
+    print(StringWithLineNumber('bool', 343) in {InterpreterBase.INT_DEF, InterpreterBase.BOOL_DEF, InterpreterBase.STRING_DEF}, 'ran interpreter, no tests')
+
+
+if __name__ == '__main__':
+    main()
