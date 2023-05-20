@@ -1,7 +1,7 @@
 from bparser import BParser, StringWithLineNumber
 from intbase import InterpreterBase, ErrorType
 from enum import Enum
-from typing import Self, TypeGuard, Union, ValuesView, Callable
+from typing import Self, TypeGuard, Union, ValuesView, Callable, NoReturn
 
 # StatementType = tuple[StringWithLineNumber, *tuple[StringWithLineNumber, ...]]
 StatementType = Union[tuple[StringWithLineNumber, *tuple[StringWithLineNumber, ...]], tuple['StatementType', *tuple['StatementType', ...]]]
@@ -111,6 +111,24 @@ def is_class_statement(c) -> TypeGuard[ClassStatementType]:
     return is_statement(c) and len(c) >= 3 and c[0] == InterpreterBase.CLASS_DEF and is_StringWithLineNumber(c[1]) and (c[2] == InterpreterBase.INHERITS_DEF and is_StringWithLineNumber(c[3]) and is_class_members_type(c[4:]) or is_class_members_type(c[2:]))
 
 
+def assignment_type_check(val: 'ValueDef', variable: 'VariableDef', err: Callable[[ErrorType], NoReturn]) -> None | NoReturn:
+    if val.get_type() not in variable.allowed_types:
+        err(ErrorType.TYPE_ERROR)
+
+    if val.get_type() == Type.CLASS:
+        actual_value = val.get_value()
+        if actual_value is None:  # null.
+            # todo. still needa check CLASS_NAME bc assigning unrelated null to other class isnt allowed
+            pass
+        else:
+            assert isinstance(actual_value, ObjectDef)
+
+        pass
+        # todo, polymorphism
+
+    return
+
+
 class EnvironmentManager:
     """
     The EnvironmentManager class maintains the lexical environment for a construct.
@@ -151,7 +169,10 @@ class EnvironmentManager:
             allowed_types.add(type_mappings[allowed_type])
         # TODO check type of value, set null class_name
 
-        self.__environments[-1][symbol] = (value, VariableDef(allowed_types, allowed_classes))
+        new_var = VariableDef(allowed_types, allowed_classes)
+        assignment_type_check(value, new_var, self.interpreter.error)
+
+        self.__environments[-1][symbol] = (value, new_var)
 
     def mutate(self, symbol: StringWithLineNumber, value: 'ValueDef') -> None:
         matched_env = None
@@ -162,16 +183,12 @@ class EnvironmentManager:
 
         assert matched_env is not None and symbol in matched_env
         matched_value, matched_variable = matched_env[symbol]
-        if value.type() not in matched_variable.allowed_types:
-            self.interpreter.error(ErrorType.TYPE_ERROR)
-        elif value.type() == Type.CLASS:
-            pass
-        matched_value.mutate_value(value.value())
+        assignment_type_check(value, matched_variable, self.interpreter.error)
+        matched_value.mutate_value(value.get_value())
 
 
 class Type(Enum):
     """Enum for all possible Brewin types."""
-    # todo change to prime numbers for type concat/union? or just use set
     # print(Type.INT.value)
     INT = 1
     BOOL = 2
@@ -197,10 +214,10 @@ class ValueDef:
         else:
             self.class_name = None
 
-    def type(self) -> Type:
+    def get_type(self) -> Type:
         return self.__type
 
-    def value(self) -> FieldValueType:
+    def get_value(self) -> FieldValueType:
         return self.__value
 
     def mutate_value(self, val: FieldValueType) -> None:
@@ -477,8 +494,8 @@ class ObjectDef:
         for expr in code[1:]:
             # TESTING NOTE: Will not test printing of object references
             term = self.__evaluate_expression(env, expr, code[0].line_num)
-            val = term.value()
-            typ = term.type()
+            val = term.get_value()
+            typ = term.get_type()
             if typ == Type.BOOL:
                 val = "true" if val else "false"
             # document - will never print out an object ref
@@ -503,13 +520,13 @@ class ObjectDef:
     # member fields
     def __set_variable_aux(self, env: EnvironmentManager, var_name: StringWithLineNumber, value: ValueDef, line_num):
         # parameter shadows fields
-        if value.type() == Type.NOTHING:
+        if value.get_type() == Type.NOTHING:
             self.interpreter.error(
                 ErrorType.TYPE_ERROR, "can't assign to nothing " + var_name, line_num
             )
         param_val = env.get(var_name)
         if param_val is not None:  # in params
-            # todo: check type. if class type but no class_name, set it here
+            # todo: check type. if class type and no class_name, set it here
             env.mutate(var_name, value)
             return
 
@@ -517,20 +534,22 @@ class ObjectDef:
             self.interpreter.error(
                 ErrorType.NAME_ERROR, "unknown variable " + var_name, line_num
             )
-        # todo type check
-        self.obj_fields[var_name][0].mutate_value(value.value())
+        field_var = self.obj_fields[var_name][1]
+        assignment_type_check(value, field_var, self.interpreter.error)
+
+        self.obj_fields[var_name][0].mutate_value(value.get_value())
 
     # (if expression (statement) (statement) ) where expression could be a boolean constant (e.g., true), member
     # variable without ()s, or a boolean expression in parens, like (> 5 a)
     def __execute_if(self, env: EnvironmentManager, code: IfStatementType):
         condition = self.__evaluate_expression(env, code[1], code[0].line_num)
-        if condition.type() != Type.BOOL:
+        if condition.get_type() != Type.BOOL:
             self.interpreter.error(
                 ErrorType.TYPE_ERROR,
                 "non-boolean if condition " + ' '.join(x for x in code[1]),  # type: ignore
                 code[0].line_num,
             )
-        if condition.value():
+        if condition.get_value():
             status, return_value = self.__execute_statement(
                 env, code[2]
             )  # if condition was true
@@ -547,13 +566,13 @@ class ObjectDef:
     def __execute_while(self, env: EnvironmentManager, code: WhileStatementType) -> tuple:
         while True:
             condition = self.__evaluate_expression(env, code[1], code[0].line_num)
-            if condition.type() != Type.BOOL:
+            if condition.get_type() != Type.BOOL:
                 self.interpreter.error(
                     ErrorType.TYPE_ERROR,
                     "non-boolean while condition " + ' '.join(x for x in code[1]),  # type: ignore
                     code[0].line_num,
                 )
-            if not condition.value():  # condition is false, exit loop immediately
+            if not condition.get_value():  # condition is false, exit loop immediately
                 return ObjectDef.STATUS_PROCEED, None
             # condition is true, run body of while loop
             status, return_value = self.__execute_statement(env, code[2])
@@ -590,7 +609,7 @@ class ObjectDef:
         if operator in self.binary_op_list:
             operand1 = self.__evaluate_expression(env, expr[1], line_num_of_statement)
             operand2 = self.__evaluate_expression(env, expr[2], line_num_of_statement)
-            if operand1.type() == operand2.type() and operand1.type() == Type.INT:
+            if operand1.get_type() == operand2.get_type() and operand1.get_type() == Type.INT:
                 if operator not in self.binary_ops[Type.INT]:
                     self.interpreter.error(
                         ErrorType.TYPE_ERROR,
@@ -598,7 +617,7 @@ class ObjectDef:
                         line_num_of_statement,
                     )
                 return self.binary_ops[Type.INT][operator](operand1, operand2)
-            if operand1.type() == operand2.type() and operand1.type() == Type.STRING:
+            if operand1.get_type() == operand2.get_type() and operand1.get_type() == Type.STRING:
                 if operator not in self.binary_ops[Type.STRING]:
                     self.interpreter.error(
                         ErrorType.TYPE_ERROR,
@@ -606,7 +625,7 @@ class ObjectDef:
                         line_num_of_statement,
                     )
                 return self.binary_ops[Type.STRING][operator](operand1, operand2)
-            if operand1.type() == operand2.type() and operand1.type() == Type.BOOL:
+            if operand1.get_type() == operand2.get_type() and operand1.get_type() == Type.BOOL:
                 if operator not in self.binary_ops[Type.BOOL]:
                     self.interpreter.error(
                         ErrorType.TYPE_ERROR,
@@ -614,7 +633,7 @@ class ObjectDef:
                         line_num_of_statement,
                     )
                 return self.binary_ops[Type.BOOL][operator](operand1, operand2)
-            if operand1.type() == operand2.type() and operand1.type() == Type.CLASS:
+            if operand1.get_type() == operand2.get_type() and operand1.get_type() == Type.CLASS:
                 if operator not in self.binary_ops[Type.CLASS]:
                     self.interpreter.error(
                         ErrorType.TYPE_ERROR,
@@ -630,7 +649,7 @@ class ObjectDef:
             )
         if operator in self.unary_op_list:
             operand = self.__evaluate_expression(env, expr[1], line_num_of_statement)
-            if operand.type() == Type.BOOL:
+            if operand.get_type() == Type.BOOL:
                 if operator not in self.unary_ops[Type.BOOL]:
                     self.interpreter.error(
                         ErrorType.TYPE_ERROR,
@@ -662,7 +681,7 @@ class ObjectDef:
         else:
             obj = self.__evaluate_expression(
                 env, obj_name, line_num_of_statement
-            ).value()
+            ).get_value()
         # prepare the actual arguments for passing
         if obj is None:
             self.interpreter.error(
@@ -692,8 +711,9 @@ class ObjectDef:
                 allowed_types.add(type_mappings[field.type])
             field_val = create_value(field.default_field_value, field.type)
             assert field_val is not None
-            # todo type check
-            self.obj_fields[field.field_name] = (field_val, VariableDef(allowed_types, allowed_classes))
+            field_variable = VariableDef(allowed_types, allowed_classes)
+            assignment_type_check(field_val, field_variable, self.interpreter.error)
+            self.obj_fields[field.field_name] = (field_val, field_variable)
 
     def __create_map_of_operations_to_lambdas(self):
         self.binary_op_list = [
@@ -750,7 +770,7 @@ class ObjectDef:
 
         self.unary_ops: dict[Type, dict[str, Callable[[ValueDef], ValueDef]]] = {}
         self.unary_ops[Type.BOOL] = {
-            "!": lambda a: ValueDef(Type.BOOL, not a.value()),
+            "!": lambda a: ValueDef(Type.BOOL, not a.get_value()),
         }
 
 
