@@ -368,11 +368,29 @@ class ObjectDef:
         status, return_value = self.__execute_statement(env, method_info.code)
         # if the method explicitly used the (return expression) statement to return a value, then return that
         # value back to the caller
+
+        return_type = env.method.return_type
+        type_mappings = {InterpreterBase.INT_DEF: Type.INT, InterpreterBase.BOOL_DEF: Type.BOOL, InterpreterBase.STRING_DEF: Type.STRING, InterpreterBase.VOID_DEF: Type.NOTHING}
+
         if status == ObjectDef.STATUS_RETURN:
+            if return_type in type_mappings:
+                if type_mappings[return_type] != return_value.type():
+                    self.interpreter.error(ErrorType.TYPE_ERROR)
+            else:
+                # todo check class type
+                pass
             return return_value
         # The method didn't explicitly return a value, so return a value of type nothing
         # return Value(InterpreterBase.NOTHING_DEF)
-        return ValueDef(Type.NOTHING)
+        return_defaults = {InterpreterBase.INT_DEF: StringWithLineNumber('0', 0), InterpreterBase.BOOL_DEF: StringWithLineNumber(
+            InterpreterBase.FALSE_DEF, 0), InterpreterBase.STRING_DEF: StringWithLineNumber('""', 0), InterpreterBase.VOID_DEF: StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0)}
+        if return_type in return_defaults:
+            return create_value(return_defaults[return_type])
+
+        # create default class object null
+        return create_value(StringWithLineNumber(InterpreterBase.NULL_DEF, 0), return_type)
+
+        # return ValueDef(Type.NOTHING)
 
     def __execute_statement(self, env: EnvironmentManager, code: StatementType):
         """
@@ -440,12 +458,7 @@ class ObjectDef:
     def __execute_return(self, env: EnvironmentManager, code: ReturnExpressionType):
         if len(code) == 1:
             # [return] with no return expression
-
-            return_defaults = {InterpreterBase.INT_DEF: StringWithLineNumber('0', 0), InterpreterBase.BOOL_DEF: StringWithLineNumber(
-                InterpreterBase.FALSE_DEF, 0), InterpreterBase.STRING_DEF: StringWithLineNumber('""', 0), InterpreterBase.VOID_DEF: StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0)}
-            return_type = env.method.return_type
-            # return ObjectDef.STATUS_RETURN, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
-            return ObjectDef.STATUS_RETURN, create_value(return_defaults.get(return_type, StringWithLineNumber(InterpreterBase.NULL_DEF, 0)), env.method.return_type)
+            return ObjectDef.STATUS_RETURN, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
         return ObjectDef.STATUS_RETURN, self.__evaluate_expression(
             env, code[1], code[0].line_num
         )
