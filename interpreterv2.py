@@ -492,7 +492,7 @@ class ObjectDef:
             new_val = create_value(s[2], s[0])
             assert new_val is not None
             env.set(s[1], new_val, s[0])
-        bgn = code[2:]
+        bgn = (StringWithLineNumber(InterpreterBase.BEGIN_DEF, 0), *code[2:])
         assert is_begin_statement(bgn)
         res = self.__execute_begin(env, bgn)
         env.pop_env()
