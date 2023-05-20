@@ -18,7 +18,7 @@ SetStatementType = tuple[StringWithLineNumber, StringWithLineNumber, StatementTy
 
 IfStatementType = Union[tuple[StringWithLineNumber, StatementType, StatementType, StatementType],
                         tuple[StringWithLineNumber, StatementType, StatementType]]
-BeginStatementType = tuple[StringWithLineNumber, tuple[StatementType, *tuple[StatementType, ...]]]
+BeginStatementType = tuple[StringWithLineNumber, StatementType, *tuple[StatementType, ...]]
 WhileStatementType = tuple[StringWithLineNumber, StatementType, StatementType]
 
 MethodStatementType = tuple[StringWithLineNumber, StringWithLineNumber, StringWithLineNumber, tuple[tuple[StringWithLineNumber, StringWithLineNumber], ...], StatementType]
@@ -36,6 +36,10 @@ ClassMembersType = tuple[MethodOrFieldType, *tuple[MethodOrFieldType, ...]]
 ClassStatementType = Union[tuple[StringWithLineNumber, StringWithLineNumber, MethodOrFieldType, *tuple[MethodOrFieldType, ...]],
                            tuple[StringWithLineNumber, StringWithLineNumber, StringWithLineNumber, StringWithLineNumber, MethodOrFieldType, *tuple[MethodOrFieldType, ...]]]
 ParsedProgramType = tuple[ClassStatementType, *tuple[ClassStatementType, ...]]  # tuple of class statements
+
+LetVariableDeclaration = tuple[StringWithLineNumber, StringWithLineNumber, StringWithLineNumber]
+LetStatementType = tuple[StringWithLineNumber, tuple[LetVariableDeclaration, *tuple[LetVariableDeclaration, ...]],
+                         StatementType, *tuple[StatementType, ...]]
 
 
 def is_StringWithLineNumber(s) -> TypeGuard[StringWithLineNumber]:
@@ -82,7 +86,7 @@ def is_if_statement(s: StatementType) -> TypeGuard[IfStatementType]:
     return s[0] == InterpreterBase.IF_DEF and (len(s) == 4 and is_statement(s[3]) or len(s) == 3) and is_statement(s[2]) and is_expression(s[1])
 
 
-def is_begin_statement(s: StatementType) -> TypeGuard[BeginStatementType]:
+def is_begin_statement(s) -> TypeGuard[BeginStatementType]:
     return s[0] == InterpreterBase.BEGIN_DEF and len(s) > 1 and all(map(is_statement, s[1:]))
 
 
@@ -109,6 +113,14 @@ def is_class_members_type(c: tuple[MethodOrFieldType | StringWithLineNumber | St
 def is_class_statement(c) -> TypeGuard[ClassStatementType]:
     # method/field
     return is_statement(c) and len(c) >= 3 and c[0] == InterpreterBase.CLASS_DEF and is_StringWithLineNumber(c[1]) and (c[2] == InterpreterBase.INHERITS_DEF and is_StringWithLineNumber(c[3]) and is_class_members_type(c[4:]) or is_class_members_type(c[2:]))
+
+
+def is_let_dec(s) -> TypeGuard[LetVariableDeclaration]:
+    return is_statement(s) and len(s) == 3 and all(is_StringWithLineNumber(x) for x in s)
+
+
+def is_let_statement(s) -> TypeGuard[LetStatementType]:
+    return s[0] == InterpreterBase.LET_DEF and is_statement(s) and len(s) >= 3
 
 
 def assignment_type_check(val: 'ValueDef', variable: 'VariableDef', err: Callable[[ErrorType], NoReturn]) -> None | NoReturn:
@@ -185,6 +197,12 @@ class EnvironmentManager:
         matched_value, matched_variable = matched_env[symbol]
         assignment_type_check(value, matched_variable, self.interpreter.error)
         matched_value.mutate_value(value.get_value())
+
+    def create_env(self):
+        self.__environments.append({})
+
+    def pop_env(self):
+        self.__environments.pop()
 
 
 class Type(Enum):
@@ -396,7 +414,7 @@ class ObjectDef:
         return_type = env.method.return_type
         type_mappings = {InterpreterBase.INT_DEF: Type.INT, InterpreterBase.BOOL_DEF: Type.BOOL, InterpreterBase.STRING_DEF: Type.STRING, InterpreterBase.VOID_DEF: Type.NOTHING}
 
-        if status == ObjectDef.STATUS_RETURN:
+        if status == ObjectDef.STATUS_RETURN and return_value.get_type() != Type.NOTHING:
             if return_type in type_mappings:
                 if type_mappings[return_type] != return_value.get_type():
                     self.interpreter.error(ErrorType.TYPE_ERROR)
@@ -445,6 +463,8 @@ class ObjectDef:
             return self.__execute_input(env, code, False)
         if is_print_statement(code):
             return self.__execute_print(env, code)
+        if is_let_statement(code):
+            return self.__execute_let(env, code)
 
         self.interpreter.error(
             ErrorType.SYNTAX_ERROR, "unknown statement " + str(tok), tok.line_num
@@ -462,6 +482,21 @@ class ObjectDef:
         # if we run thru the entire block without a return, then just return proceed
         # we don't want the calling block to exit with a return
         return ObjectDef.STATUS_PROCEED, None
+
+    def __execute_let(self, env: EnvironmentManager, code: LetStatementType):
+        vars = code[1]
+        env.create_env()
+        for s in vars:
+            assert is_let_dec(s)
+            assert is_StringWithLineNumber(s[0]) and is_StringWithLineNumber(s[1]) and is_StringWithLineNumber(s[2])
+            new_val = create_value(s[2], s[0])
+            assert new_val is not None
+            env.set(s[1], new_val, s[0])
+        bgn = code[2:]
+        assert is_begin_statement(bgn)
+        res = self.__execute_begin(env, bgn)
+        env.pop_env()
+        return res
 
     # (call object_ref/me methodname param1 param2 param3)
     # where params are expressions, and expression could be a value, or a (+ ...)
