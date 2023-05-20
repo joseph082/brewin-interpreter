@@ -310,11 +310,14 @@ class ClassDef:
         self.__types = {InterpreterBase.INT_DEF, InterpreterBase.BOOL_DEF, InterpreterBase.STRING_DEF}
         if class_def[2] == InterpreterBase.INHERITS_DEF:
             members = class_def[4:]
-            assert is_StringWithLineNumber(class_def[3])
-            self.parent_class = class_def[3]
+            parent_class_name = class_def[3]
+            assert is_StringWithLineNumber(parent_class_name)
+            if parent_class_name not in self.interpreter.class_index:
+                self.interpreter.error(ErrorType.TYPE_ERROR)
+            self.parent_class_def = self.interpreter.class_index[parent_class_name]
         else:
             members = class_def[2:]
-            self.parent_class = StringWithLineNumber('', 0)
+            self.parent_class_def = None
         assert is_class_members_type(members)
         self.__create_field_list(members)
         self.__create_method_list(members)
@@ -378,6 +381,7 @@ class ObjectDef:
         self.__map_fields_to_values()
         self.__map_method_names_to_method_definitions()
         self.__create_map_of_operations_to_lambdas()  # sets up maps to facilitate binary and unary operations, e.g., (+ 5 6)
+        self.parent_object = None if class_def.parent_class_def is None else ObjectDef(interpreter, class_def.parent_class_def)
 
     def call_method(self, method_name: StringWithLineNumber, actual_params: tuple[ValueDef, ...], line_num_of_caller):
         """

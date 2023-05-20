@@ -1,0 +1,31 @@
+
+(class main
+ (method int foo ((int x))
+     (let ((int y 5) (string z "bar"))
+        (print x)
+        (print y)
+                (return 1)
+
+        (print z)
+     )
+ )
+ (method void main ()
+  (print   (call me foo 10))
+ )
+)
+
+
+(class main2 inherits main3
+ (method int foo ((int x))
+     (let ((int y 5) (string z "bar"))
+        (print x)
+        (print y)
+                (return 1)
+
+        (print z)
+     )
+ )
+ (method void main ()
+  (print   (call me foo 10))
+ )
+)
