@@ -383,6 +383,13 @@ class ObjectDef:
         self.__create_map_of_operations_to_lambdas()  # sets up maps to facilitate binary and unary operations, e.g., (+ 5 6)
         self.parent_object = None if class_def.parent_class_def is None else ObjectDef(interpreter, class_def.parent_class_def, trace_output)
 
+    def is_correct_method_call(self, method: MethodDef, args: tuple[ValueDef, ...]) -> bool:
+        if len(args) != len(method.formal_params):
+            return False
+        for formal, actual in zip(method.formal_params, args):
+            pass
+        return True
+
     def call_method(self, method_name: StringWithLineNumber, actual_params: tuple[ValueDef, ...], line_num_of_caller):
         """
         actual_params is a list of Value objects (all parameters are passed by value).
@@ -390,19 +397,22 @@ class ObjectDef:
         The caller passes in the line number so we can properly generate an error message.
         The error is then generated at the source (i.e., where the call is initiated).
         """
-        if method_name not in self.obj_methods:
-            self.interpreter.error(
-                ErrorType.NAME_ERROR,
-                "unknown method " + method_name,
-                line_num_of_caller,
-            )
-        method_info = self.obj_methods[method_name]
-        if len(actual_params) != len(method_info.formal_params):
-            self.interpreter.error(
-                ErrorType.TYPE_ERROR,
-                "invalid number of parameters in call to " + method_name,
-                line_num_of_caller,
-            )
+        found_method = False
+        method_info = None
+        if method_name in self.obj_methods:
+            method_info = self.obj_methods[method_name]
+            found_method = self.is_correct_method_call(method_info, actual_params)
+        if not found_method:
+            if self.parent_object is None:
+                self.interpreter.error(
+                    ErrorType.NAME_ERROR,
+                    "unknown method " + method_name,
+                    line_num_of_caller,
+                )
+            res = self.parent_object.call_method(method_name, actual_params, line_num_of_caller)
+            # type check
+            return res
+        assert method_info is not None
         env = (
             EnvironmentManager(self.interpreter, method_info)
         )  # maintains lexical environment for function; just params for now
@@ -477,6 +487,7 @@ class ObjectDef:
     # (begin (statement1) (statement2) ... (statementn))
     def __execute_begin(self, env: EnvironmentManager, code: BeginStatementType):
         for statement in code[1:]:
+            # assert is_statement(statement)
             status, return_value = self.__execute_statement(env, statement)
             if status == ObjectDef.STATUS_RETURN:
                 return (

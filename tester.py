@@ -140,12 +140,9 @@ def generate_test_suite_v2():
     """wrapper for generate_test_suite for v2"""
     return __generate_test_suite(
         2,
-        # ["test_compare_null", "test_return_default1", "test_inher2", "test_inher1",
-        #  "test_simple", "test_scratch"],
-        ["test_compare_null", "test_return_default1", "test_let", "test_simple", "test_scratch"],
-        # ["test_incompat_return1", "test_let2", "test_inher1", "test_incompat_types2",
-        #  "test_compare_unrelated_null"],
-        ["test_incompat_return1", "test_incompat_types2",
+        ["test_compare_null", "test_return_default1",  "test_inher2", "test_inher1",
+         "test_let", "test_simple", "test_scratch"],
+        ["test_incompat_return1", "test_let2", "test_inher1", "test_incompat_types2",
          "test_compare_unrelated_null", "test_scratch_fail", "test_inherits_unknown"],
     )
 
