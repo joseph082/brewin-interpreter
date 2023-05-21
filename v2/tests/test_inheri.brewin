@@ -1,0 +1,25 @@
+(class l
+ (field string name "jesse")
+ (method string foo ((string i)) (return (+ name i)))
+)
+(class person inherits l
+  (method string bar () (return (call me foo "10")))
+)
+
+(class student inherits person
+  (method string foo ((int i)) (return (+ "3" "100")))
+)
+(class student2 inherits student
+  (method string foo ((string i)) (return (+ i (call me foo 3))))
+)
+
+(class main
+  (field person s null)
+  (method void main ()
+    (begin
+      (set s (new student2))
+      (print (call s bar))
+    )
+  )
+)
+
