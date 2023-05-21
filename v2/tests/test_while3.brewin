@@ -1,0 +1,48 @@
+(class main
+ (field int x 0)
+ (field main y null)
+ (field string s "")
+ (method main main2 ((int x) (string s))
+  (begin
+    (while (< s "sssssss")
+      (begin
+       (print s x)
+       (set s (+ s "s"))
+     )
+    )
+    (while (< x 2)
+      (begin
+       (print x s)
+       (set x (+ x 1))
+     )
+    )
+    (while false
+     (print x)
+    )
+    (while (< x 0)
+     (print x)
+    )
+    (while (< x 100)
+    (begin
+     (print x)
+     (set x (+ 2 x))
+     )
+    )
+    (while (== y null)
+    (begin
+     (print x)
+     (set y (new main))
+     )
+    )
+    (while (!= y null)
+    (begin
+     (print x)
+     (set y null)
+     )
+    )
+    (while true (begin (begin  (set y y) (return null))))
+  )
+ )
+ (method void main ()
+ (print (!= (call me main2 3 "s") null)))
+)
