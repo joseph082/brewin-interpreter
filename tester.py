@@ -143,7 +143,7 @@ def generate_test_suite_v2():
         # passes
         ["test_compare_null", "test_return_default1",  "test_inher2", "test_inher1",
          "test_let", "test_simple", "test_scratch", "test_while3",
-         "test_super"],
+         "test_super", "test_return_default3"],
         # fails
         ["test_incompat_return1", "test_let2", "test_inher1", "test_incompat_types2",
          "test_compare_unrelated_null", "test_scratch_fail", "test_inherits_unknown"],

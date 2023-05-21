@@ -420,7 +420,7 @@ class ObjectDef:
         type_mappings = {InterpreterBase.INT_DEF: Type.INT, InterpreterBase.BOOL_DEF: Type.BOOL, InterpreterBase.STRING_DEF: Type.STRING, InterpreterBase.VOID_DEF: Type.NOTHING}
 
         # if status == ObjectDef.STATUS_RETURN and return_value.get_type() != Type.NOTHING:
-        if status == ObjectDef.STATUS_RETURN:
+        if status == ObjectDef.STATUS_RETURN and return_value.get_type() != Type.NOTHING:
             if return_type in type_mappings:
                 if return_value.get_type() == Type.NOTHING:
                     # default
@@ -433,6 +433,7 @@ class ObjectDef:
                 # todo check class type
                 # if not self.interpreter.assignment_type_check():
                 #     pass
+                # if return_value.
                 return return_value
             # return return_value
         # The method didn't explicitly return a value, so return a value of type nothing
@@ -660,7 +661,8 @@ class ObjectDef:
                     self.interpreter.error(ErrorType.TYPE_ERROR,                        "invalid operator applied to class",                        line_num_of_statement,)
                 return self.binary_ops[Type.CLASS][operator](operand1, operand2)
             # error what about an obj reference and null
-            self.interpreter.error(ErrorType.TYPE_ERROR,                f"operator {operator} applied to two incompatible types",                line_num_of_statement,)
+            self.interpreter.error(ErrorType.TYPE_ERROR,
+                                   f"operator {operator} applied to two incompatible types", line_num_of_statement,)
         if operator in self.unary_op_list:
             operand = self.__evaluate_expression(env, expr[1], line_num_of_statement)
             if operand.get_type() == Type.BOOL:
