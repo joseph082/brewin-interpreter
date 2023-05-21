@@ -346,6 +346,8 @@ class ClassDef:
                 if (return_type != InterpreterBase.VOID_DEF and return_type not in self.__types and
                         return_type not in self.interpreter.class_index and return_type != self.name):
                     self.interpreter.error(ErrorType.TYPE_ERROR)
+                if len(set(p[1] for p in member[3])) != len(member[3]):
+                    self.interpreter.error(ErrorType.NAME_ERROR)
                 self.class_methods[member[2]] = MethodDef(member)
                 # methods_defined_so_far.add(member[1])
 
@@ -356,14 +358,15 @@ class ObjectDef:
     STATUS_NAME_ERROR = 2
     STATUS_TYPE_ERROR = 3
 
-    def __init__(self, interpreter: 'Interpreter', class_def: ClassDef, trace_output):
+    def __init__(self, interpreter: 'Interpreter', class_def: ClassDef, trace_output, child_obj: Union['ObjectDef', None] = None):
         self.interpreter = interpreter  # objref to interpreter object. used to report errors, get input, produce output
         self.class_def = class_def  # take class body from 3rd+ list elements, e.g., ["class",classname", [classbody]]
         self.trace_output = trace_output
         self.__map_fields_to_values()
         self.__map_method_names_to_method_definitions()
         self.__create_map_of_operations_to_lambdas()  # sets up maps to facilitate binary and unary operations, e.g., (+ 5 6)
-        self.parent_object = None if class_def.parent_class_def is None else ObjectDef(interpreter, class_def.parent_class_def, trace_output)
+        self.child_obj = child_obj
+        self.parent_object = None if class_def.parent_class_def is None else ObjectDef(interpreter, class_def.parent_class_def, trace_output, self if self.child_obj is None else self.child_obj)
 
     def is_correct_method_call(self, method: MethodDef, args: tuple[ValueDef, ...]) -> bool:
         if len(args) != len(method.formal_params):
@@ -497,6 +500,8 @@ class ObjectDef:
     def __execute_let(self, env: EnvironmentManager, code: LetStatementType):
         vars = code[1]
         env.create_env()
+        if len(set(s[1] for s in vars)) != len(vars):
+            self.interpreter.error(ErrorType.NAME_ERROR)
         for s in vars:
             assert is_let_dec(s)
             assert is_StringWithLineNumber(s[0]) and is_StringWithLineNumber(s[1]) and is_StringWithLineNumber(s[2])
@@ -689,7 +694,7 @@ class ObjectDef:
         # determine which object we want to call the method on
         obj_name = code[1]
         if obj_name == InterpreterBase.ME_DEF:
-            obj = self
+            obj = self.child_obj if self.child_obj is not None else self
         elif obj_name == InterpreterBase.SUPER_DEF:
             obj = self.parent_object
         else:
