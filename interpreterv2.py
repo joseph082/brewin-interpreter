@@ -624,6 +624,8 @@ class ObjectDef:
     def __evaluate_expression(self, env: EnvironmentManager, expr: ExpressionType, line_num_of_statement) -> ValueDef:
         if not isinstance(expr, tuple):
             assert is_StringWithLineNumber(expr)
+            if expr == InterpreterBase.ME_DEF:
+                return ValueDef(Type.CLASS, self, class_name=self.class_def.name)
             # locals shadow member variables
             val = env.get(expr)
             if val is not None:
