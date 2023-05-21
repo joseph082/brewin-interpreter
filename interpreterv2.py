@@ -112,7 +112,8 @@ def is_class_members_type(c: tuple[MethodOrFieldType | StringWithLineNumber | St
 
 def is_class_statement(c) -> TypeGuard[ClassStatementType]:
     # method/field
-    return is_statement(c) and len(c) >= 3 and c[0] == InterpreterBase.CLASS_DEF and is_StringWithLineNumber(c[1]) and (c[2] == InterpreterBase.INHERITS_DEF and is_StringWithLineNumber(c[3]) and is_class_members_type(c[4:]) or is_class_members_type(c[2:]))
+    return is_statement(c) and len(c) >= 3 and c[0] == InterpreterBase.CLASS_DEF and is_StringWithLineNumber(c[1]) and (
+        c[2] == InterpreterBase.INHERITS_DEF and is_StringWithLineNumber(c[3]) and is_class_members_type(c[4:]) or is_class_members_type(c[2:]))
 
 
 def is_let_dec(s) -> TypeGuard[LetVariableDeclaration]:
@@ -156,7 +157,8 @@ class EnvironmentManager:
         assert is_StringWithLineNumber(allowed_type)
         allowed_types: set[Type] = set()
         allowed_classes: set[StringWithLineNumber] = set()
-        type_mappings = {InterpreterBase.INT_DEF: Type.INT, InterpreterBase.BOOL_DEF: Type.BOOL, InterpreterBase.STRING_DEF: Type.STRING}
+        type_mappings = {InterpreterBase.INT_DEF: Type.INT, InterpreterBase.BOOL_DEF: Type.BOOL,
+                         InterpreterBase.STRING_DEF: Type.STRING}
         if allowed_type not in type_mappings:
             allowed_types.add(Type.CLASS)
             allowed_classes.add(allowed_type)
@@ -326,10 +328,11 @@ class ClassDef:
         for member in class_body:
             if is_field_statement(member):
                 if member[2] in self.class_fields:  # redefinition
-                    self.interpreter.error(ErrorType.NAME_ERROR,                        "duplicate field " + member[1],                        member[0].line_num,)
+                    self.interpreter.error(ErrorType.NAME_ERROR, "duplicate field " + member[1], member[0].line_num,)
 
                 field_type = member[1]
-                if field_type not in self.__types and field_type not in self.interpreter.class_index and field_type != self.name:
+                if (field_type not in self.__types and field_type not in self.interpreter.class_index and
+                        field_type != self.name):
                     self.interpreter.error(ErrorType.TYPE_ERROR)
                 self.class_fields[member[2]] = FieldDef(member)
 
@@ -338,9 +341,10 @@ class ClassDef:
         for member in class_body:
             if is_method_statement(member):
                 if member[2] in self.class_methods:  # redefinition
-                    self.interpreter.error(ErrorType.NAME_ERROR,                        "duplicate method " + member[1],                        member[0].line_num,)
+                    self.interpreter.error(ErrorType.NAME_ERROR, "duplicate method " + member[1], member[0].line_num,)
                 return_type = member[1]
-                if return_type != InterpreterBase.VOID_DEF and return_type not in self.__types and return_type not in self.interpreter.class_index:
+                if (return_type != InterpreterBase.VOID_DEF and return_type not in self.__types and
+                        return_type not in self.interpreter.class_index and return_type != self.name):
                     self.interpreter.error(ErrorType.TYPE_ERROR)
                 self.class_methods[member[2]] = MethodDef(member)
                 # methods_defined_so_far.add(member[1])
@@ -419,18 +423,23 @@ class ObjectDef:
         if status == ObjectDef.STATUS_RETURN:
             if return_type in type_mappings:
                 if return_value.get_type() == Type.NOTHING:
-
+                    # default
                     pass
-                if type_mappings[return_type] != return_value.get_type():
+                elif type_mappings[return_type] != return_value.get_type():
                     self.interpreter.error(ErrorType.TYPE_ERROR)
+                else:
+                    return return_value
             else:
                 # todo check class type
-                pass
-            return return_value
+                # if not self.interpreter.assignment_type_check():
+                #     pass
+                return return_value
+            # return return_value
         # The method didn't explicitly return a value, so return a value of type nothing
         # return Value(InterpreterBase.NOTHING_DEF)
         return_defaults = {InterpreterBase.INT_DEF: StringWithLineNumber('0', 0), InterpreterBase.BOOL_DEF: StringWithLineNumber(
-            InterpreterBase.FALSE_DEF, 0), InterpreterBase.STRING_DEF: StringWithLineNumber('""', 0), InterpreterBase.VOID_DEF: StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0)}
+            InterpreterBase.FALSE_DEF, 0), InterpreterBase.STRING_DEF: StringWithLineNumber('""', 0),
+            InterpreterBase.VOID_DEF: StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0)}
         if return_type in return_defaults:
             return create_value(return_defaults[return_type])
 
@@ -479,10 +488,7 @@ class ObjectDef:
             assert is_statement(statement)
             status, return_value = self.__execute_statement(env, statement)
             if status == ObjectDef.STATUS_RETURN:
-                return (
-                    status,
-                    return_value,
-                )  # could be a valid return of a value or an error
+                return (status, return_value)  # could be a valid return of a value or an error
         # if we run thru the entire block without a return, then just return proceed
         # we don't want the calling block to exit with a return
         return ObjectDef.STATUS_PROCEED, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
@@ -523,7 +529,7 @@ class ObjectDef:
     def __execute_return(self, env: EnvironmentManager, code: ReturnExpressionType):
         if len(code) == 1:
             # [return] with no return expression
-            return ObjectDef.STATUS_PROCEED, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
+            return ObjectDef.STATUS_RETURN, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
         return ObjectDef.STATUS_RETURN, self.__evaluate_expression(
             env, code[1], code[0].line_num
         )
@@ -686,7 +692,7 @@ class ObjectDef:
             ).get_value()
         # prepare the actual arguments for passing
         if obj is None:
-            self.interpreter.error(ErrorType.FAULT_ERROR, "null dereference", line_num_of_statement)
+            self.interpreter.error(ErrorType.FAULT_ERROR, f"null dereference. {code}", line_num_of_statement)
         assert isinstance(obj, ObjectDef)
         actual_args = tuple(map(lambda expr: self.__evaluate_expression(env, expr, line_num_of_statement), code[3:]))
         assert is_StringWithLineNumber(code[2])
