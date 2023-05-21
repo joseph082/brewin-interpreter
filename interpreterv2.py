@@ -662,7 +662,7 @@ class ObjectDef:
                     self.interpreter.error(ErrorType.TYPE_ERROR,                        "invalid operator applied to bool",                        line_num_of_statement,)
                 return self.binary_ops[Type.BOOL][operator](operand1, operand2)
             if operand1.get_type() == operand2.get_type() and operand1.get_type() == Type.CLASS:
-                if operator not in self.binary_ops[Type.CLASS]:
+                if operator not in self.binary_ops[Type.CLASS] or (not self.interpreter.is_same_or_derived_class(operand1.class_name, operand2.class_name) and not self.interpreter.is_same_or_derived_class(operand2.class_name, operand1.class_name)):
                     self.interpreter.error(ErrorType.TYPE_ERROR,                        "invalid operator applied to class",                        line_num_of_statement,)
                 return self.binary_ops[Type.CLASS][operator](operand1, operand2)
             # error what about an obj reference and null
@@ -814,7 +814,7 @@ class Interpreter(InterpreterBase):
         self.class_index = {}
 
     def is_same_or_derived_class(self, c: StringWithLineNumber, ancestor: StringWithLineNumber) -> bool:
-        if c == ancestor:
+        if c == ancestor or c == '_' or ancestor == '_':
             return True
         c_class = self.class_index[c]
         if c_class.parent_class_def is None:
