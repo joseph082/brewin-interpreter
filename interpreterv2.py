@@ -1,7 +1,7 @@
 from bparser import BParser, StringWithLineNumber
 from intbase import InterpreterBase, ErrorType
 from enum import Enum
-from typing import Self, TypeGuard, Union, ValuesView, Callable, NoReturn
+from typing import Self, TypeGuard, Union, ValuesView, Callable, NoReturn, Literal
 
 # StatementType = tuple[StringWithLineNumber, *tuple[StringWithLineNumber, ...]]
 StatementType = Union[tuple[StringWithLineNumber, *tuple[StringWithLineNumber, ...]], tuple['StatementType', *tuple['StatementType', ...]]]
@@ -79,7 +79,7 @@ def is_new_expression(s: StatementType) -> TypeGuard[NewExpressionType]:
 
 
 def is_while_statement(s: StatementType) -> TypeGuard[WhileStatementType]:
-    return s[0] == InterpreterBase.WHILE_DEF and len(s) == 3 and is_expression(s[1]) and is_statement(s[2])
+    return s[0] == InterpreterBase.WHILE_DEF  # and len(s) == 3 and is_expression(s[1]) and is_statement(s[2])
 
 
 def is_if_statement(s: StatementType) -> TypeGuard[IfStatementType]:
@@ -123,23 +123,6 @@ def is_let_statement(s) -> TypeGuard[LetStatementType]:
     return s[0] == InterpreterBase.LET_DEF and is_statement(s) and len(s) >= 3
 
 
-def assignment_type_check(val: 'ValueDef', variable: 'VariableDef') -> bool:
-    if val.get_type() not in variable.allowed_types:
-        return False
-
-    if val.get_type() == Type.CLASS:
-        actual_value = val.get_value()
-        if actual_value is None:  # null.
-            # todo. still needa check CLASS_NAME bc assigning unrelated null to other class isnt allowed
-            pass
-        else:
-            assert isinstance(actual_value, ObjectDef)
-
-        # todo, polymorphism
-
-    return True
-
-
 class EnvironmentManager:
     """
     The EnvironmentManager class maintains the lexical environment for a construct.
@@ -169,6 +152,7 @@ class EnvironmentManager:
         """
         Set data associated with a variable name.
         """
+        value = ValueDef(value.get_type(), value.get_value(), class_name=value.class_name)
         assert is_StringWithLineNumber(allowed_type)
         allowed_types: set[Type] = set()
         allowed_classes: set[StringWithLineNumber] = set()
@@ -181,7 +165,7 @@ class EnvironmentManager:
         # TODO check type of value, set null class_name
 
         new_var = VariableDef(allowed_types, allowed_classes)
-        if not assignment_type_check(value, new_var):
+        if not self.interpreter.assignment_type_check(value, new_var):
             self.interpreter.error(ErrorType.TYPE_ERROR)
 
         self.__environments[-1][symbol] = (value, new_var)
@@ -195,7 +179,7 @@ class EnvironmentManager:
 
         assert matched_env is not None and symbol in matched_env
         matched_value, matched_variable = matched_env[symbol]
-        if not assignment_type_check(value, matched_variable):
+        if not self.interpreter.assignment_type_check(value, matched_variable):
             self.interpreter.error(ErrorType.TYPE_ERROR)
         matched_value.mutate_value(value.get_value())
 
@@ -225,7 +209,8 @@ class ValueDef:
         self.__type = value_type
         self.__value = value
         if value_type == Type.CLASS:
-            if value is None:
+            if value is None and False:
+                # class_name should be set in following else block but maybe not
                 self.class_name = StringWithLineNumber(InterpreterBase.NULL_DEF, 0)
             else:
                 self.class_name = kwargs['class_name']
@@ -269,7 +254,6 @@ def create_value(val: StringWithLineNumber, class_name: StringWithLineNumber = S
         return ValueDef(Type.CLASS, None, class_name=class_name)
     if val == InterpreterBase.NOTHING_DEF:
         return ValueDef(Type.NOTHING, None)
-    # assert False
     return None
 
 
@@ -307,6 +291,7 @@ class ClassDef:
 
     def __init__(self, class_def: ClassStatementType, interpreter: 'Interpreter'):
         self.interpreter = interpreter
+        assert is_StringWithLineNumber(class_def[1])
         self.name = class_def[1]
         self.__types = {InterpreterBase.INT_DEF, InterpreterBase.BOOL_DEF, InterpreterBase.STRING_DEF}
         if class_def[2] == InterpreterBase.INHERITS_DEF:
@@ -341,11 +326,7 @@ class ClassDef:
         for member in class_body:
             if is_field_statement(member):
                 if member[2] in self.class_fields:  # redefinition
-                    self.interpreter.error(
-                        ErrorType.NAME_ERROR,
-                        "duplicate field " + member[1],
-                        member[0].line_num,
-                    )
+                    self.interpreter.error(ErrorType.NAME_ERROR,                        "duplicate field " + member[1],                        member[0].line_num,)
 
                 field_type = member[1]
                 if field_type not in self.__types and field_type not in self.interpreter.class_index and field_type != self.name:
@@ -357,11 +338,7 @@ class ClassDef:
         for member in class_body:
             if is_method_statement(member):
                 if member[2] in self.class_methods:  # redefinition
-                    self.interpreter.error(
-                        ErrorType.NAME_ERROR,
-                        "duplicate method " + member[1],
-                        member[0].line_num,
-                    )
+                    self.interpreter.error(ErrorType.NAME_ERROR,                        "duplicate method " + member[1],                        member[0].line_num,)
                 return_type = member[1]
                 if return_type != InterpreterBase.VOID_DEF and return_type not in self.__types and return_type not in self.interpreter.class_index:
                     self.interpreter.error(ErrorType.TYPE_ERROR)
@@ -401,7 +378,7 @@ class ObjectDef:
             # TODO check type of value, set null class_name
 
             new_var = VariableDef(allowed_types, allowed_classes)
-            if not assignment_type_check(actual, new_var):
+            if not self.interpreter.assignment_type_check(actual, new_var):
                 return False
         return True
 
@@ -419,11 +396,7 @@ class ObjectDef:
             found_method = self.is_correct_method_call(method_info, actual_params)
         if not found_method:
             if self.parent_object is None:
-                self.interpreter.error(
-                    ErrorType.NAME_ERROR,
-                    "unknown method " + method_name,
-                    line_num_of_caller,
-                )
+                self.interpreter.error(ErrorType.NAME_ERROR,                    "unknown method " + method_name,     line_num_of_caller,)
             res = self.parent_object.call_method(method_name, actual_params, line_num_of_caller)
             # type check
             return res
@@ -433,7 +406,6 @@ class ObjectDef:
         )  # maintains lexical environment for function; just params for now
         # print(list(zip(method_info.formal_params, actual_params)))
         for formal, actual in zip(method_info.formal_params, actual_params):
-            # assert is_StringWithLineNumber(formal)
             env.set(formal[1], actual, formal[0])
         # since each method has a single top-level statement, execute it.
         status, return_value = self.__execute_statement(env, method_info.code)
@@ -443,8 +415,12 @@ class ObjectDef:
         return_type = env.method.return_type
         type_mappings = {InterpreterBase.INT_DEF: Type.INT, InterpreterBase.BOOL_DEF: Type.BOOL, InterpreterBase.STRING_DEF: Type.STRING, InterpreterBase.VOID_DEF: Type.NOTHING}
 
-        if status == ObjectDef.STATUS_RETURN and return_value.get_type() != Type.NOTHING:
+        # if status == ObjectDef.STATUS_RETURN and return_value.get_type() != Type.NOTHING:
+        if status == ObjectDef.STATUS_RETURN:
             if return_type in type_mappings:
+                if return_value.get_type() == Type.NOTHING:
+
+                    pass
                 if type_mappings[return_type] != return_value.get_type():
                     self.interpreter.error(ErrorType.TYPE_ERROR)
             else:
@@ -463,7 +439,7 @@ class ObjectDef:
 
         # return ValueDef(Type.NOTHING)
 
-    def __execute_statement(self, env: EnvironmentManager, code: StatementType):
+    def __execute_statement(self, env: EnvironmentManager, code: StatementType) -> tuple[Literal[0] | Literal[1], ValueDef | None] | NoReturn:
         """
         returns (status_code, return_value) where:
         - status_code indicates if the next statement includes a return
@@ -495,9 +471,7 @@ class ObjectDef:
         if is_let_statement(code):
             return self.__execute_let(env, code)
 
-        self.interpreter.error(
-            ErrorType.SYNTAX_ERROR, "unknown statement " + str(tok), tok.line_num
-        )
+        self.interpreter.error(ErrorType.SYNTAX_ERROR, "unknown statement " + str(tok), tok.line_num)
 
     # (begin (statement1) (statement2) ... (statementn))
     def __execute_begin(self, env: EnvironmentManager, code: BeginStatementType):
@@ -511,7 +485,7 @@ class ObjectDef:
                 )  # could be a valid return of a value or an error
         # if we run thru the entire block without a return, then just return proceed
         # we don't want the calling block to exit with a return
-        return ObjectDef.STATUS_PROCEED, None
+        return ObjectDef.STATUS_PROCEED, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
 
     def __execute_let(self, env: EnvironmentManager, code: LetStatementType):
         vars = code[1]
@@ -540,14 +514,16 @@ class ObjectDef:
     # (set varname expression), where expression could be a value, or a (+ ...)
     def __execute_set(self, env: EnvironmentManager, code: SetStatementType):
         val = self.__evaluate_expression(env, code[2], code[0].line_num)
+        # if val.class_name == '_':
+        #     val.class_name = code[1]
         self.__set_variable_aux(env, code[1], val, code[0].line_num)
-        return ObjectDef.STATUS_PROCEED, None
+        return ObjectDef.STATUS_PROCEED, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
 
     # (return expression) where expression could be a value, or a (+ ...)
     def __execute_return(self, env: EnvironmentManager, code: ReturnExpressionType):
         if len(code) == 1:
             # [return] with no return expression
-            return ObjectDef.STATUS_RETURN, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
+            return ObjectDef.STATUS_PROCEED, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
         return ObjectDef.STATUS_RETURN, self.__evaluate_expression(
             env, code[1], code[0].line_num
         )
@@ -567,7 +543,7 @@ class ObjectDef:
             output += str(val)
         self.interpreter.output(output)
         print(f'output: {output}')
-        return ObjectDef.STATUS_PROCEED, None
+        return ObjectDef.STATUS_PROCEED, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
 
     # (inputs target_variable) or (inputi target_variable) sets target_variable to input string/int
     def __execute_input(self, env: EnvironmentManager, code: InputIntStatementType, get_string: bool):
@@ -579,16 +555,14 @@ class ObjectDef:
             val = ValueDef(Type.INT, int(inp))
 
         self.__set_variable_aux(env, code[1], val, code[0].line_num)
-        return ObjectDef.STATUS_PROCEED, None
+        return ObjectDef.STATUS_PROCEED, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
 
     # helper method used to set either parameter variables or member fields; parameters currently shadow
     # member fields
     def __set_variable_aux(self, env: EnvironmentManager, var_name: StringWithLineNumber, value: ValueDef, line_num):
         # parameter shadows fields
         if value.get_type() == Type.NOTHING:
-            self.interpreter.error(
-                ErrorType.TYPE_ERROR, "can't assign to nothing " + var_name, line_num
-            )
+            self.interpreter.error(ErrorType.TYPE_ERROR, "can't assign to nothing " + var_name, line_num)
         param_val = env.get(var_name)
         if param_val is not None:  # in params
             # todo: check type. if class type and no class_name, set it here
@@ -596,11 +570,9 @@ class ObjectDef:
             return
 
         if var_name not in self.obj_fields:
-            self.interpreter.error(
-                ErrorType.NAME_ERROR, "unknown variable " + var_name, line_num
-            )
+            self.interpreter.error(ErrorType.NAME_ERROR, "unknown variable " + var_name, line_num)
         field_var = self.obj_fields[var_name][1]
-        if not assignment_type_check(value, field_var):
+        if not self.interpreter.assignment_type_check(value, field_var):
             self.interpreter.error(ErrorType.TYPE_ERROR)
 
         self.obj_fields[var_name][0].mutate_value(value.get_value())
@@ -610,11 +582,7 @@ class ObjectDef:
     def __execute_if(self, env: EnvironmentManager, code: IfStatementType):
         condition = self.__evaluate_expression(env, code[1], code[0].line_num)
         if condition.get_type() != Type.BOOL:
-            self.interpreter.error(
-                ErrorType.TYPE_ERROR,
-                "non-boolean if condition " + ' '.join(x for x in code[1]),  # type: ignore
-                code[0].line_num,
-            )
+            self.interpreter.error(ErrorType.TYPE_ERROR,                "non-boolean if condition " + ' '.join(x for x in code[1]),                  code[0].line_num,)
         if condition.get_value():
             status, return_value = self.__execute_statement(
                 env, code[2]
@@ -625,7 +593,7 @@ class ObjectDef:
                 env, code[3]
             )  # if condition was false, do else
             return status, return_value
-        return ObjectDef.STATUS_PROCEED, None
+        return ObjectDef.STATUS_PROCEED, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
 
     # (while expression (statement) ) where expression could be a boolean value, boolean member variable,
     # or a boolean expression in parens, like (> 5 a)
@@ -633,13 +601,9 @@ class ObjectDef:
         while True:
             condition = self.__evaluate_expression(env, code[1], code[0].line_num)
             if condition.get_type() != Type.BOOL:
-                self.interpreter.error(
-                    ErrorType.TYPE_ERROR,
-                    "non-boolean while condition " + ' '.join(x for x in code[1]),  # type: ignore
-                    code[0].line_num,
-                )
+                self.interpreter.error(ErrorType.TYPE_ERROR,                    "non-boolean while condition " + ' '.join(x for x in code[1]),              code[0].line_num)
             if not condition.get_value():  # condition is false, exit loop immediately
-                return ObjectDef.STATUS_PROCEED, None
+                return ObjectDef.STATUS_PROCEED, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
             # condition is true, run body of while loop
             status, return_value = self.__execute_statement(env, code[2])
             if status == ObjectDef.STATUS_RETURN:
@@ -664,11 +628,7 @@ class ObjectDef:
             value = create_value(expr)
             if value is not None:
                 return value
-            self.interpreter.error(
-                ErrorType.NAME_ERROR,
-                "invalid field or parameter " + expr,
-                line_num_of_statement,
-            )
+            self.interpreter.error(ErrorType.NAME_ERROR,                "invalid field or parameter " + expr,                line_num_of_statement,)
 
         operator = expr[0]
         assert is_statement(expr) and is_StringWithLineNumber(operator)
@@ -677,51 +637,27 @@ class ObjectDef:
             operand2 = self.__evaluate_expression(env, expr[2], line_num_of_statement)
             if operand1.get_type() == operand2.get_type() and operand1.get_type() == Type.INT:
                 if operator not in self.binary_ops[Type.INT]:
-                    self.interpreter.error(
-                        ErrorType.TYPE_ERROR,
-                        "invalid operator applied to ints",
-                        line_num_of_statement,
-                    )
+                    self.interpreter.error(ErrorType.TYPE_ERROR,                        "invalid operator applied to ints",                        line_num_of_statement,)
                 return self.binary_ops[Type.INT][operator](operand1, operand2)
             if operand1.get_type() == operand2.get_type() and operand1.get_type() == Type.STRING:
                 if operator not in self.binary_ops[Type.STRING]:
-                    self.interpreter.error(
-                        ErrorType.TYPE_ERROR,
-                        "invalid operator applied to strings",
-                        line_num_of_statement,
-                    )
+                    self.interpreter.error(ErrorType.TYPE_ERROR,                        "invalid operator applied to strings",                        line_num_of_statement,)
                 return self.binary_ops[Type.STRING][operator](operand1, operand2)
             if operand1.get_type() == operand2.get_type() and operand1.get_type() == Type.BOOL:
                 if operator not in self.binary_ops[Type.BOOL]:
-                    self.interpreter.error(
-                        ErrorType.TYPE_ERROR,
-                        "invalid operator applied to bool",
-                        line_num_of_statement,
-                    )
+                    self.interpreter.error(ErrorType.TYPE_ERROR,                        "invalid operator applied to bool",                        line_num_of_statement,)
                 return self.binary_ops[Type.BOOL][operator](operand1, operand2)
             if operand1.get_type() == operand2.get_type() and operand1.get_type() == Type.CLASS:
                 if operator not in self.binary_ops[Type.CLASS]:
-                    self.interpreter.error(
-                        ErrorType.TYPE_ERROR,
-                        "invalid operator applied to class",
-                        line_num_of_statement,
-                    )
+                    self.interpreter.error(ErrorType.TYPE_ERROR,                        "invalid operator applied to class",                        line_num_of_statement,)
                 return self.binary_ops[Type.CLASS][operator](operand1, operand2)
             # error what about an obj reference and null
-            self.interpreter.error(
-                ErrorType.TYPE_ERROR,
-                f"operator {operator} applied to two incompatible types",
-                line_num_of_statement,
-            )
+            self.interpreter.error(ErrorType.TYPE_ERROR,                f"operator {operator} applied to two incompatible types",                line_num_of_statement,)
         if operator in self.unary_op_list:
             operand = self.__evaluate_expression(env, expr[1], line_num_of_statement)
             if operand.get_type() == Type.BOOL:
                 if operator not in self.unary_ops[Type.BOOL]:
-                    self.interpreter.error(
-                        ErrorType.TYPE_ERROR,
-                        "invalid unary operator applied to bool",
-                        line_num_of_statement,
-                    )
+                    self.interpreter.error(ErrorType.TYPE_ERROR, "invalid unary operator applied to bool", line_num_of_statement,)
                 return self.unary_ops[Type.BOOL][operator](operand)
 
         # handle call expression: (call objref methodname p1 p2 p3)
@@ -750,9 +686,7 @@ class ObjectDef:
             ).get_value()
         # prepare the actual arguments for passing
         if obj is None:
-            self.interpreter.error(
-                ErrorType.FAULT_ERROR, "null dereference", line_num_of_statement
-            )
+            self.interpreter.error(ErrorType.FAULT_ERROR, "null dereference", line_num_of_statement)
         assert isinstance(obj, ObjectDef)
         actual_args = tuple(map(lambda expr: self.__evaluate_expression(env, expr, line_num_of_statement), code[3:]))
         assert is_StringWithLineNumber(code[2])
@@ -778,7 +712,7 @@ class ObjectDef:
             field_val = create_value(field.default_field_value, field.type)
             assert field_val is not None
             field_variable = VariableDef(allowed_types, allowed_classes)
-            if not assignment_type_check(field_val, field_variable):
+            if not self.interpreter.assignment_type_check(field_val, field_variable):
                 self.interpreter.error(ErrorType.TYPE_ERROR)
             self.obj_fields[field.field_name] = (field_val, field_variable)
 
@@ -861,6 +795,35 @@ class Interpreter(InterpreterBase):
         self.trace_output = trace_output
         self.main_object = None
         self.class_index = {}
+
+    def is_same_or_derived_class(self, c: StringWithLineNumber, ancestor: StringWithLineNumber) -> bool:
+        if c == ancestor:
+            return True
+        c_class = self.class_index[c]
+        if c_class.parent_class_def is None:
+            return False
+        c_class.parent_class_def.name
+        return self.is_same_or_derived_class(c_class.parent_class_def.name, ancestor)
+
+    def assignment_type_check(self, val: 'ValueDef', variable: 'VariableDef') -> bool:
+        if val.get_type() not in variable.allowed_types:
+            return False
+
+        if val.get_type() == Type.CLASS:
+            actual_value = val.get_value()
+            if actual_value is None:  # null.
+                if val.class_name == '_':
+                    val.class_name = list(variable.allowed_classes)[0]
+                print(val.class_name, 'obj is null')
+                # todo. still needa check CLASS_NAME bc assigning unrelated null to other class isnt allowed
+                pass
+            else:
+                assert isinstance(actual_value, ObjectDef)
+            print('bbbb', val.class_name)
+            return self.is_same_or_derived_class(val.class_name, list(variable.allowed_classes)[0])
+            # todo, polymorphism
+
+        return True
 
     def run(self, program):
         """
