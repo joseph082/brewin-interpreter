@@ -1,0 +1,13 @@
+
+(class  h (method void main () (return)))
+(class person inherits h (method void main () (return)))
+(class main
+  (field h pers null)
+  (method person ask_dog_to_bark ((person d)) (return pers))
+  (method void main ()
+    (let ((h pers null))
+      (call me ask_dog_to_bark (new person))
+      (print 1)
+    )
+  )
+)

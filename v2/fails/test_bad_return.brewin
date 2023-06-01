@@ -1,0 +1,11 @@
+(class person (method void main () (return)))
+(class main
+  (field person pers null)
+  (method person ask_dog_to_bark ((person  d)) (return 1))
+  (method void main ()
+    (begin
+      (set pers (new person))
+      (call me ask_dog_to_bark pers)
+    )
+  )
+)

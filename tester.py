@@ -147,7 +147,7 @@ def generate_test_suite_v2():
         # fails
         ["test_incompat_return1", "test_let2", "test_inher1", "test_incompat_types2",
          "test_compare_unrelated_null", "test_scratch_fail", "test_inherits_unknown",
-         "test_let_dupe"],
+         "test_let_dupe", "test_bad_param", "test_bad_return"],
     )
 
 

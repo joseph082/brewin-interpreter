@@ -423,7 +423,7 @@ class ObjectDef:
         type_mappings = {InterpreterBase.INT_DEF: Type.INT, InterpreterBase.BOOL_DEF: Type.BOOL, InterpreterBase.STRING_DEF: Type.STRING, InterpreterBase.VOID_DEF: Type.NOTHING}
 
         # if status == ObjectDef.STATUS_RETURN and return_value.get_type() != Type.NOTHING:
-        if status == ObjectDef.STATUS_RETURN and return_value.get_type() != Type.NOTHING:
+        if status == ObjectDef.STATUS_RETURN and return_value is not None and return_value.get_type() != Type.NOTHING:
             if return_type in type_mappings:
                 if return_value.get_type() == Type.NOTHING:
                     # default
@@ -433,6 +433,8 @@ class ObjectDef:
                 else:
                     return return_value
             else:
+                if return_value.get_type() != Type.CLASS or not self.interpreter.is_same_or_derived_class(return_value.class_name, return_type):
+                    self.interpreter.error(ErrorType.TYPE_ERROR)
                 # todo check class type
                 # if not self.interpreter.assignment_type_check():
                 #     pass
@@ -613,7 +615,7 @@ class ObjectDef:
         while True:
             condition = self.__evaluate_expression(env, code[1], code[0].line_num)
             if condition.get_type() != Type.BOOL:
-                self.interpreter.error(ErrorType.TYPE_ERROR,                    "non-boolean while condition " + ' '.join(x for x in code[1]),              code[0].line_num)
+                self.interpreter.error(ErrorType.TYPE_ERROR,                    "non-boolean while condition",              code[0].line_num)
             if not condition.get_value():  # condition is false, exit loop immediately
                 return ObjectDef.STATUS_PROCEED, create_value(StringWithLineNumber(InterpreterBase.NOTHING_DEF, 0))
             # condition is true, run body of while loop
@@ -631,7 +633,7 @@ class ObjectDef:
         if not isinstance(expr, tuple):
             assert is_StringWithLineNumber(expr)
             if expr == InterpreterBase.ME_DEF:
-                return ValueDef(Type.CLASS, self, class_name=self.class_def.name)
+                return ValueDef(Type.CLASS, self.child_obj if self.child_obj is not None else self  , class_name=self.class_def.name)
             # locals shadow member variables
             val = env.get(expr)
             if val is not None:
