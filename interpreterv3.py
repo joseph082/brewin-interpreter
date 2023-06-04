@@ -194,7 +194,7 @@ class TypeManager:
                 raise 'unexpected type in tclass statement'
             return s
         replace_all(copied_statement)
-        print('\n',original_statement, '\n\n', copied_statement)
+        print('\n', original_statement, '\n\n', copied_statement)
 
         self.add_class_type(declaration, None)
 
@@ -388,6 +388,8 @@ class ClassDef:
     def __init__(self, class_source, interpreter: 'Interpreter'):
         self.interpreter = interpreter
         self.name = class_source[1]
+        if class_source[0] == InterpreterBase.TEMPLATE_CLASS_DEF:
+            self.name = StringWithLineNumber(f'{self.name}{InterpreterBase.TYPE_CONCAT_CHAR}{InterpreterBase.TYPE_CONCAT_CHAR.join(class_source[2])}',0)
         self.class_source = class_source
         fields_and_methods_start_index = (
             self.__check_for_inheritance_and_set_superclass_info(class_source)
