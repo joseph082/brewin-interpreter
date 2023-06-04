@@ -710,7 +710,8 @@ class ObjectDef:
 
     def __execute_throw(self, env, return_type, code):
         val = self.__evaluate_expression(env, code[1], code[0].line_num)
-        # todo: if not string, throw
+        if val is None or val.t != Type(InterpreterBase.STRING_DEF):
+            self.interpreter.error(ErrorType.TYPE_ERROR)
         val.make_error()
         return ObjectDef.STATUS_RETURN, val
 
