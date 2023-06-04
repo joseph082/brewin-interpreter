@@ -722,8 +722,6 @@ class ObjectDef:
             status, res = self.__execute_statement(env, return_type, code[2])
             env.block_unnest()
             # maybe can throw err in catch? todo:env exception
-            if res is not None and res.is_error_val:
-                return ObjectDef.STATUS_RETURN, res
         if status == ObjectDef.STATUS_RETURN:
             return ObjectDef.STATUS_RETURN, res
         return ObjectDef.STATUS_PROCEED, None
@@ -997,9 +995,10 @@ class ObjectDef:
         # prepare the actual arguments for passing
         actual_args = []
         for expr in code[3:]:
-            actual_args.append(
-                self.__evaluate_expression(env, expr, line_num_of_statement)
-            )
+            actual_arg = self.__evaluate_expression(env, expr, line_num_of_statement)
+            if actual_arg is not None and actual_arg.is_error_val:
+                return actual_arg
+            actual_args.append(actual_arg)
         return obj.call_method(code[2], actual_args, super_only, line_num_of_statement)
 
     def __map_method_names_to_method_definitions(self):
