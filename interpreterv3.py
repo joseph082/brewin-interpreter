@@ -146,34 +146,39 @@ class TypeManager:
         # [template_class, ...types] =
         for t in types:
             if not self.is_valid_type(t):
-                self.interpreter.error(ErrorType.TYPE_ERROR)
+                self.interpreter.error(ErrorType.TYPE_ERROR, f'invalid type: {t}')
 
         # if template_class not in self.template_classes:
         # throw error
+
         original_statement = self.template_classes[template_class]
+        # deepcopy statement with replaced strings
+        copied_statement = copy.deepcopy(original_statement)
         if len(types) != len(copied_statement[2]):
             self.interpreter.error(ErrorType.TYPE_ERROR)
 
-        copied_statement = copy.deepcopy(original_statement)
-
         def replace_all(s):
             if isinstance(s, list):
-                for i in len(s):
+                for i in range(len(s)):
                     s[i] = replace_all(s[i])
-            elif isinstance(s, StringWithLineNumber):
+            elif isinstance(s, (StringWithLineNumber, str)):
                 if s in original_statement[2]:
                     ind = original_statement[2].index(s)
                     s = StringWithLineNumber(types[ind], 0)
+                elif InterpreterBase.TYPE_CONCAT_CHAR in s:
+                    t_class, *type_args = s.split(InterpreterBase.TYPE_CONCAT_CHAR)
+                    print(f'type_args: {type_args}')
+                    new_str = t_class + InterpreterBase.TYPE_CONCAT_CHAR + InterpreterBase.TYPE_CONCAT_CHAR.join(list(map(replace_all, type_args)))
+                    s = StringWithLineNumber(new_str, 0)
             else:
                 raise 'unexpected type in tclass statement'
             return s
         replace_all(copied_statement)
-        # deepcopy statement with replaced strings
-        # map_typename_to_type[template_class]
-        # copy add_class_type
+        print(original_statement, '\n\n', copied_statement)
 
-        self.interpreter.class_index[template_class] = ClassDef(copied_statement, self.interpreter)
         self.add_class_type(declaration, None)
+
+        self.interpreter.class_index[declaration] = ClassDef(copied_statement, self.interpreter)
         return
 
     # used to register a new class name (and its supertype name, if present as a valid type so it can be used
@@ -360,7 +365,7 @@ class MethodDef:
 # v2 class definition: [class classname [inherits baseclassname] [field1] [field2] ... [method1] [method2] ...]
 # [] denotes optional syntax
 class ClassDef:
-    def __init__(self, class_source, interpreter):
+    def __init__(self, class_source, interpreter: 'Interpreter'):
         self.interpreter = interpreter
         self.name = class_source[1]
         self.class_source = class_source
@@ -421,6 +426,8 @@ class ClassDef:
         var_def = VariableDef(
             Type(field_def[1]), field_def[2], create_value(field_def[3]) if len(field_def) >= 4 else create_default_value(Type(field_def[1]))
         )
+        if InterpreterBase.TYPE_CONCAT_CHAR in field_def[1]:
+            self.interpreter.type_manager.create_template_class_type(field_def[1])
         if not self.interpreter.check_type_compatibility(
             var_def.type, var_def.value.type(), True
         ):
@@ -487,7 +494,7 @@ class ObjectDef:
     BOOL_TYPE_CONST = Type(InterpreterBase.BOOL_DEF)
 
     # class_def is a ClassDef object
-    def __init__(self, interpreter, class_def, anchor_object=None, trace_output=False):
+    def __init__(self, interpreter: 'Interpreter', class_def, anchor_object=None, trace_output=False):
         self.interpreter = interpreter  # objref to interpreter object. used to report errors, get input, produce output
         self.class_def = class_def
 
@@ -648,6 +655,8 @@ class ObjectDef:
             # vardef in the form of (typename varname defvalue)
             var_type = Type(var_def[0])
             var_name = var_def[1]
+            if InterpreterBase.TYPE_CONCAT_CHAR in var_def[0]:
+                self.interpreter.type_manager.create_template_class_type(var_def[0])
             default_value = create_value(var_def[2]) if len(var_def) >= 3 else create_default_value(var_type)
             # make sure default value for each local is of a matching type
             self.__check_type_compatibility(
