@@ -71,6 +71,7 @@ class Value:
     def __init__(self, type_obj, value=None):
         self.t = type_obj
         self.v = value
+        self.is_error_val = False
 
     def value(self):
         return self.v
@@ -90,6 +91,9 @@ class Value:
 
     def __eq__(self, other):
         return self.t == other.t and self.v == other.v
+
+    def make_error(self):
+        self.is_error_val = True
 
 
 # val is a string with the value we want to use to construct a Value object.
@@ -389,7 +393,7 @@ class ClassDef:
         self.interpreter = interpreter
         self.name = class_source[1]
         if class_source[0] == InterpreterBase.TEMPLATE_CLASS_DEF:
-            self.name = StringWithLineNumber(f'{self.name}{InterpreterBase.TYPE_CONCAT_CHAR}{InterpreterBase.TYPE_CONCAT_CHAR.join(class_source[2])}',0)
+            self.name = StringWithLineNumber(f'{self.name}{InterpreterBase.TYPE_CONCAT_CHAR}{InterpreterBase.TYPE_CONCAT_CHAR.join(class_source[2])}', 0)
         self.class_source = class_source
         fields_and_methods_start_index = (
             self.__check_for_inheritance_and_set_superclass_info(class_source)
@@ -642,6 +646,10 @@ class ObjectDef:
             return self.__execute_print(env, code)
         elif tok == InterpreterBase.LET_DEF:
             return self.__execute_let(env, return_type, code)
+        elif tok == InterpreterBase.TRY_DEF:
+            return self.__execute_try(env, return_type, code)
+        elif tok == InterpreterBase.THROW_DEF:
+            return self.__execute_throw(env, return_type, code)
         else:
             # Report error via interpreter
             self.interpreter.error(
@@ -698,17 +706,44 @@ class ObjectDef:
     def __execute_let(self, env, return_type, code):
         return self.__execute_begin(env, return_type, code, True)
 
+    def __execute_throw(self, env, return_type, code):
+        val = self.__evaluate_expression(env, code[1], code[0].line_num)
+        # todo: if not string, throw
+        val.make_error()
+        return ObjectDef.STATUS_RETURN, val
+
+    def __execute_try(self, env, return_type, code):
+        status, res = self.__execute_statement(env, return_type, code[1])
+        if res.is_error_val:
+            env.block_nest()
+            fake_let = [[StringWithLineNumber(InterpreterBase.STRING_DEF, 0), StringWithLineNumber(
+                InterpreterBase.EXCEPTION_VARIABLE_DEF, 0), StringWithLineNumber(f'"{res.v}"', 0)]]
+            self.__add_locals_to_env(env, fake_let, code[0].line_num)
+            status, res = self.__execute_statement(env, return_type, code[2])
+            env.block_unnest()
+            # maybe can throw err in catch? todo:env exception
+            if res is not None and res.is_error_val:
+                return ObjectDef.STATUS_RETURN, res
+        if status == ObjectDef.STATUS_RETURN:
+            return ObjectDef.STATUS_RETURN, res
+        return ObjectDef.STATUS_PROCEED, None
+
     # (call object_ref/me methodname param1 param2 param3)
     # where params are expressions, and expresion could be a value, or a (+ ...)
     # statement version of a method call; there's also an expression version of a method call below
     def __execute_call(self, env, code):
-        return ObjectDef.STATUS_PROCEED, self.__execute_call_aux(
+        res = self.__execute_call_aux(
             env, code, code[0].line_num
         )
+        if res.is_error_val:
+            return ObjectDef.STATUS_RETURN, res
+        return ObjectDef.STATUS_PROCEED, res
 
     # (set varname expression), where expression could be a value, or a (+ ...)
     def __execute_set(self, env, code):
         val = self.__evaluate_expression(env, code[2], code[0].line_num)
+        if val.is_error_val:
+            return ObjectDef.STATUS_RETURN, val
         self.__set_variable_aux(
             env, code[1], val, code[0].line_num
         )  # checks/reports type and name errors
@@ -736,6 +771,8 @@ class ObjectDef:
         for expr in code[1:]:
             # TESTING NOTE: Will not test printing of object references
             term = self.__evaluate_expression(env, expr, code[0].line_num)
+            if term.is_error_val:
+                return ObjectDef.STATUS_RETURN, term
             val = term.value()
             typ = term.type()
             if typ == ObjectDef.BOOL_TYPE_CONST:

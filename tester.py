@@ -153,7 +153,13 @@ def generate_test_suite_v2():
 
 def generate_test_suite_v3():
     """wrapper for generate_test_suite for v3"""
-    return __generate_test_suite(3, ["test_str_ops", "test_template1", "test_template8", "test_template7_check"], [])
+    return __generate_test_suite(
+        3,
+        # passes
+        ["test_str_ops", "test_template1", "test_template8", "test_template7_check",
+         "test_except1"],
+        # fails
+        [])
 
 
 async def main():
