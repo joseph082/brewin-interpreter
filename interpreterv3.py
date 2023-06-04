@@ -688,6 +688,8 @@ class ObjectDef:
             if InterpreterBase.TYPE_CONCAT_CHAR in var_def[0]:
                 self.interpreter.type_manager.create_template_class_type(var_def[0])
             default_value = create_value(var_def[2]) if len(var_def) >= 3 else create_default_value(var_type)
+            # if var_name == InterpreterBase.EXCEPTION_VARIABLE_DEF:
+            #     default_value.make_error()
             # make sure default value for each local is of a matching type
             self.__check_type_compatibility(
                 var_type, default_value.type(), True, line_number
@@ -714,7 +716,7 @@ class ObjectDef:
 
     def __execute_try(self, env, return_type, code):
         status, res = self.__execute_statement(env, return_type, code[1])
-        if res.is_error_val:
+        if res is not None and res.is_error_val:
             env.block_nest()
             fake_let = [[StringWithLineNumber(InterpreterBase.STRING_DEF, 0), StringWithLineNumber(
                 InterpreterBase.EXCEPTION_VARIABLE_DEF, 0), StringWithLineNumber(f'"{res.v}"', 0)]]
@@ -733,14 +735,14 @@ class ObjectDef:
         res = self.__execute_call_aux(
             env, code, code[0].line_num
         )
-        if res.is_error_val:
+        if res is not None and res.is_error_val:
             return ObjectDef.STATUS_RETURN, res
         return ObjectDef.STATUS_PROCEED, res
 
     # (set varname expression), where expression could be a value, or a (+ ...)
     def __execute_set(self, env, code):
         val = self.__evaluate_expression(env, code[2], code[0].line_num)
-        if val.is_error_val:
+        if val is not None and val.is_error_val:
             return ObjectDef.STATUS_RETURN, val
         self.__set_variable_aux(
             env, code[1], val, code[0].line_num
@@ -755,6 +757,8 @@ class ObjectDef:
         else:
             result = self.__evaluate_expression(env, code[1], code[0].line_num)
             # CAREY FIX
+            # if result is not None and result.is_error_val:
+            #     return ObjectDef.STATUS_RETURN, result
             if result.is_typeless_null():
                 self.__check_type_compatibility(return_type, result.type(), True, code[0].line_num)
                 result = Value(return_type, None)  # propagate return type to null ###
@@ -769,7 +773,7 @@ class ObjectDef:
         for expr in code[1:]:
             # TESTING NOTE: Will not test printing of object references
             term = self.__evaluate_expression(env, expr, code[0].line_num)
-            if term.is_error_val:
+            if term is not None and term.is_error_val:
                 return ObjectDef.STATUS_RETURN, term
             val = term.value()
             typ = term.type()
@@ -812,6 +816,8 @@ class ObjectDef:
     # variable without ()s, or a boolean expression in parens, like (> 5 a)
     def __execute_if(self, env, return_type, code):
         condition = self.__evaluate_expression(env, code[1], code[0].line_num)
+        if condition is not None and condition.is_error_val:
+            return ObjectDef.STATUS_RETURN, condition
         if condition.type() != ObjectDef.BOOL_TYPE_CONST:
             self.interpreter.error(
                 ErrorType.TYPE_ERROR,
@@ -836,6 +842,8 @@ class ObjectDef:
     def __execute_while(self, env, return_type, code):
         while True:
             condition = self.__evaluate_expression(env, code[1], code[0].line_num)
+            if condition is not None and condition.is_error_val:
+                return ObjectDef.STATUS_RETURN, condition
             if condition.type() != ObjectDef.BOOL_TYPE_CONST:
                 self.interpreter.error(
                     ErrorType.TYPE_ERROR,
@@ -890,7 +898,11 @@ class ObjectDef:
         operator = expr[0]
         if operator in self.binary_op_list:
             operand1 = self.__evaluate_expression(env, expr[1], line_num_of_statement)
+            if operand1 is not None and operand1.is_error_val:
+                return operand1
             operand2 = self.__evaluate_expression(env, expr[2], line_num_of_statement)
+            if operand2 is not None and operand2.is_error_val:
+                return operand2
             if (
                 operand1.type() == operand2.type()
                 and operand1.type() == ObjectDef.INT_TYPE_CONST
@@ -944,6 +956,8 @@ class ObjectDef:
             )
         if operator in self.unary_op_list:
             operand = self.__evaluate_expression(env, expr[1], line_num_of_statement)
+            if operand is not None and operand.is_error_val:
+                return operand
             if operand.type() == ObjectDef.BOOL_TYPE_CONST:
                 if operator not in self.unary_ops[InterpreterBase.BOOL_DEF]:
                     self.interpreter.error(
@@ -987,6 +1001,8 @@ class ObjectDef:
         else:
             # return a Value() object which has a type and a value
             obj_val = self.__evaluate_expression(env, obj_name, line_num_of_statement)
+            if obj_val is not None and obj_val.is_error_val:
+                return obj_val
             if obj_val.is_null():
                 self.interpreter.error(
                     ErrorType.FAULT_ERROR, "null dereference", line_num_of_statement
