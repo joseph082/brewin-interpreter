@@ -606,7 +606,7 @@ class ObjectDef:
             # vardef in the form of (typename varname defvalue)
             var_type = Type(var_def[0])
             var_name = var_def[1]
-            default_value = create_value(var_def[2])
+            default_value = create_value(var_def[2]) if len(var_def) >= 3 else create_default_value(var_type)
             # make sure default value for each local is of a matching type
             self.__check_type_compatibility(
                 var_type, default_value.type(), True, line_number
