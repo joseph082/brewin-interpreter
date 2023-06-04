@@ -1,0 +1,25 @@
+(tclass node (field_type second_type)
+  (field node@field_type@second_type field_type null)
+  (field field_type value)
+  (method void set_val ((field_type v)) (set value v))
+  (method field_type get_val () (begin
+    (let ((field_type field_type))
+      (let ((field_type field_type))
+        (print (+ 1 1) "a" field_type)))
+    (return value)
+  )
+  )
+  (method void set_next((node@field_type@second_type n)) (set field_type n))
+  (method node@field_type@second_type get_next() (return field_type))
+)
+
+(class main
+  (method void main ()
+    (let ((node@int@string x null))
+      (set x (new node@int@string))
+      (call x set_val 5)
+      (print (call x get_val))
+    )
+  )
+)
+

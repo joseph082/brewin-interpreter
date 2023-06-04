@@ -159,22 +159,42 @@ class TypeManager:
 
         def replace_all(s):
             if isinstance(s, list):
-                for i in range(len(s)):
-                    s[i] = replace_all(s[i])
+                if s[0] == InterpreterBase.TEMPLATE_CLASS_DEF:
+                    for i in range(len(s[2])):
+                        s[2][i] = replace_all(s[2][i])
+                    for i in range(3, len(s)):
+                        s[i] = replace_all(s[i])
+
+                elif s[0] == InterpreterBase.FIELD_DEF or s[0] == InterpreterBase.NEW_DEF:
+                    s[1] = replace_all(s[1])
+                elif s[0] == InterpreterBase.METHOD_DEF:
+                    s[1] = replace_all(s[1])
+                    for i in range(len(s[3])):
+                        s[3][i][0] = replace_all(s[3][i][0])
+                    s[4] = replace_all(s[4])
+
+                elif s[0] == InterpreterBase.LET_DEF:
+                    for i in range(len(s[1])):
+                        s[1][i][0] = replace_all(s[1][i][0])
+                    for i in range(2, len(s)):
+                        s[i] = replace_all(s[i])
+                else:
+                    for i in range(len(s)):
+                        if isinstance(s[i], list):
+                            s[i] = replace_all(s[i])
             elif isinstance(s, (StringWithLineNumber, str)):
                 if s in original_statement[2]:
                     ind = original_statement[2].index(s)
                     s = StringWithLineNumber(types[ind], 0)
                 elif InterpreterBase.TYPE_CONCAT_CHAR in s:
                     t_class, *type_args = s.split(InterpreterBase.TYPE_CONCAT_CHAR)
-                    print(f'type_args: {type_args}')
                     new_str = t_class + InterpreterBase.TYPE_CONCAT_CHAR + InterpreterBase.TYPE_CONCAT_CHAR.join(list(map(replace_all, type_args)))
                     s = StringWithLineNumber(new_str, 0)
             else:
                 raise 'unexpected type in tclass statement'
             return s
         replace_all(copied_statement)
-        print(original_statement, '\n\n', copied_statement)
+        print('\n',original_statement, '\n\n', copied_statement)
 
         self.add_class_type(declaration, None)
 
