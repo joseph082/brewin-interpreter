@@ -377,7 +377,7 @@ class ClassDef:
     # returns a VariableDef object that represents that field
     def __create_variable_def_from_field(self, field_def):
         var_def = VariableDef(
-            Type(field_def[1]), field_def[2], create_value(field_def[3])
+            Type(field_def[1]), field_def[2], create_value(field_def[3]) if len(field_def) >= 4 else create_default_value(Type(field_def[1]))
         )
         if not self.interpreter.check_type_compatibility(
             var_def.type, var_def.value.type(), True
