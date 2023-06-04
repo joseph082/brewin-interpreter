@@ -159,7 +159,7 @@ def generate_test_suite_v3():
         ["test_str_ops", "test_template1", "test_template8", "test_template7_check",
          "test_except1", "test_except13"],
         # fails
-        [])
+        ["test_except4", "test_incompat_template_types", "test_template5"])
 
 
 async def main():
