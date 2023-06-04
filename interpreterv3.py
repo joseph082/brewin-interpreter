@@ -192,13 +192,13 @@ class TypeManager:
                     s = StringWithLineNumber(types[ind], 0)
                 elif InterpreterBase.TYPE_CONCAT_CHAR in s:
                     t_class, *type_args = s.split(InterpreterBase.TYPE_CONCAT_CHAR)
-                    new_str = t_class + InterpreterBase.TYPE_CONCAT_CHAR + InterpreterBase.TYPE_CONCAT_CHAR.join(list(map(replace_all, type_args)))
+                    new_str = f'{t_class}{InterpreterBase.TYPE_CONCAT_CHAR}{InterpreterBase.TYPE_CONCAT_CHAR.join(list(map(replace_all, type_args)))}'
                     s = StringWithLineNumber(new_str, 0)
             else:
                 raise 'unexpected type in tclass statement'
             return s
         replace_all(copied_statement)
-        print('\n', original_statement, '\n\n', copied_statement)
+        # print('\n', original_statement, '\n\n', copied_statement)
 
         self.add_class_type(declaration, None)
 
@@ -724,7 +724,6 @@ class ObjectDef:
             self.__add_locals_to_env(env, fake_let, code[0].line_num)
             status, res = self.__execute_statement(env, return_type, code[2])
             env.block_unnest()
-            # maybe can throw err in catch? todo:env exception
         if status == ObjectDef.STATUS_RETURN:
             return ObjectDef.STATUS_RETURN, res
         return ObjectDef.STATUS_PROCEED, None
@@ -1215,7 +1214,7 @@ class Interpreter(InterpreterBase):
                         item[0].line_num,
                     )
                 self.class_index[item[1]] = ClassDef(item, self)
-            # maybe todo: test for dupe tclasses
+            # not tested: dupe tclasses
 
     # [class classname inherits superclassname [items]]
     def __add_all_class_types_to_type_manager(self, parsed_program):
