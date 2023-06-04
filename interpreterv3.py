@@ -1,4 +1,4 @@
-from bparser import BParser
+from bparser import BParser, StringWithLineNumber
 import copy
 from intbase import InterpreterBase, ErrorType
 
@@ -130,9 +130,51 @@ def create_default_value(type_def):
 # Used to track user-defined types (for classes) as well as check for type compatibility between
 # values of same/different types for assignment/comparison
 class TypeManager:
-    def __init__(self):
+    def __init__(self, interpreter: 'Interpreter'):
         self.map_typename_to_type = {}
         self.__setup_primitive_types()
+        self.template_classes = {}
+        self.interpreter = interpreter
+
+    def add_template_class_type(self, statement):
+        self.template_classes[statement[1]] = statement
+
+    def create_template_class_type(self, declaration):
+        if self.is_valid_type(declaration):
+            return True
+        template_class, *types = declaration.split(InterpreterBase.TYPE_CONCAT_CHAR)
+        # [template_class, ...types] =
+        for t in types:
+            if not self.is_valid_type(t):
+                self.interpreter.error(ErrorType.TYPE_ERROR)
+
+        # if template_class not in self.template_classes:
+        # throw error
+        original_statement = self.template_classes[template_class]
+        if len(types) != len(copied_statement[2]):
+            self.interpreter.error(ErrorType.TYPE_ERROR)
+
+        copied_statement = copy.deepcopy(original_statement)
+
+        def replace_all(s):
+            if isinstance(s, list):
+                for i in len(s):
+                    s[i] = replace_all(s[i])
+            elif isinstance(s, StringWithLineNumber):
+                if s in original_statement[2]:
+                    ind = original_statement[2].index(s)
+                    s = StringWithLineNumber(types[ind], 0)
+            else:
+                raise 'unexpected type in tclass statement'
+            return s
+        replace_all(copied_statement)
+        # deepcopy statement with replaced strings
+        # map_typename_to_type[template_class]
+        # copy add_class_type
+
+        self.interpreter.class_index[template_class] = ClassDef(copied_statement, self.interpreter)
+        self.add_class_type(declaration, None)
+        return
 
     # used to register a new class name (and its supertype name, if present as a valid type so it can be used
     # for type checking.
@@ -1038,6 +1080,10 @@ class Interpreter(InterpreterBase):
     # if the user tries to new an class name that does not exist. This will report the line number of the statement
     # with the new command
     def instantiate(self, class_name, line_num_of_statement):
+        if InterpreterBase.TYPE_CONCAT_CHAR in class_name:
+            # template
+            self.type_manager.create_template_class_type(class_name)
+
         if class_name not in self.class_index:
             super().error(
                 ErrorType.TYPE_ERROR,
@@ -1085,10 +1131,11 @@ class Interpreter(InterpreterBase):
                         item[0].line_num,
                     )
                 self.class_index[item[1]] = ClassDef(item, self)
+            # maybe todo: test for dupe tclasses
 
     # [class classname inherits superclassname [items]]
     def __add_all_class_types_to_type_manager(self, parsed_program):
-        self.type_manager = TypeManager()
+        self.type_manager = TypeManager(self)
         for item in parsed_program:
             if item[0] == InterpreterBase.CLASS_DEF:
                 class_name = item[1]
@@ -1096,3 +1143,5 @@ class Interpreter(InterpreterBase):
                 if item[2] == InterpreterBase.INHERITS_DEF:
                     superclass_name = item[3]
                 self.type_manager.add_class_type(class_name, superclass_name)
+            elif item[0] == InterpreterBase.TEMPLATE_CLASS_DEF:
+                self.type_manager.add_template_class_type(item)
